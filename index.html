@@ -672,11 +672,8 @@ function renderSettings() {
     body.innerHTML = `
       <div class="settings-group">
         <label>Claude APIキー ${status}</label>
-        <input class="settings-input" type="password" id="api-key-input" value="${esc(apiKey)}" placeholder="sk-ant-...">
-        <div class="settings-hint">Anthropic Consoleで取得したAPIキーを入力してください。このデバイスにのみ保存されます。</div>
-      </div>
-      <div class="settings-group">
-        <button class="btn btn-blue" onclick="saveApiKey()">保存</button>
+        <input class="settings-input" type="password" id="api-key-input" value="${esc(apiKey)}" placeholder="sk-ant-..." oninput="autoSaveApiKey(this)" onpaste="setTimeout(()=>autoSaveApiKey(this),0)">
+        <div class="settings-hint">入力すると自動で保存されます。Anthropic Consoleで取得したキーを貼り付けてください。</div>
       </div>
       <div class="settings-group">
         <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: claude-opus-4-8</div>
@@ -726,11 +723,16 @@ function renderSettings() {
   }
 }
 
-function saveApiKey() {
-  const val = document.getElementById('api-key-input').value.trim();
+function autoSaveApiKey(input) {
+  const val = input.value.trim();
   localStorage.setItem(K.apiKey, val);
-  showToast('APIキーを保存しました');
-  renderSettings();
+  const label = input.closest('.settings-group').querySelector('label');
+  if (label) {
+    label.innerHTML = `Claude APIキー ${val
+      ? '<span class="api-ok set">✓ 設定済み</span>'
+      : '<span class="api-ok none">未設定</span>'}`;
+  }
+  if (val) showToast('APIキーを保存しました');
 }
 
 function saveStyles() {
