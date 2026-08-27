@@ -516,10 +516,11 @@ function normalizeLegacyStyles(raw) {
   return out;
 }
 
-function getStudents() { return studentsCache; }
-function getReports()  { return reportsCache; }
-function getApiKey()   { return settingsCache.apiKey || ''; }
-function getStyles()   { return stylesCache; }
+function getStudents()  { return studentsCache; }
+function getReports()   { return reportsCache; }
+function getApiKey()    { return settingsCache.apiKey || ''; }
+function getOpenAIKey() { return settingsCache.openaiApiKey || ''; }
+function getStyles()    { return stylesCache; }
 
 // ─── FIREBASE SYNC ──────────────────────────────────────────
 function normalizeStyleDocs(docs) {
@@ -666,8 +667,7 @@ let settingsCache = {};
 let fsUnsubs      = [];
 
 // Voice input
-let recognition = null;
-let micActive   = false;
+let micActive = false;
 
 // ─── UTILS ───────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -838,7 +838,7 @@ function startCreateForm(studentId, reportType) {
     `<span class="badge badge-${s.level}">${s.level}</span> ${typeBadge}`;
   document.getElementById('note-input').value = '';
   const micBtn = document.getElementById('mic-btn');
-  if (micBtn) micBtn.style.display = supportsSpeech() ? '' : 'none';
+  if (micBtn) micBtn.style.display = supportsRecording() ? '' : 'none';
 
   const step3Label = document.getElementById('step3-label');
   const noteInput  = document.getElementById('note-input');
@@ -888,59 +888,76 @@ function toggleChip(el) {
   else            { selectedChips.splice(idx,1); el.classList.remove('sel'); }
 }
 
-// ─── VOICE INPUT ─────────────────────────────────────────
-function supportsSpeech() {
-  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+// ─── VOICE INPUT (録音 → Whisper APIで文字起こし) ───────────
+let mediaRecorder = null;
+let audioChunks   = [];
+
+function supportsRecording() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 }
 
 function toggleMic() {
-  if (!supportsSpeech()) { showToast('このブラウザは音声入力に対応していません'); return; }
+  if (!supportsRecording()) { showToast('このブラウザは音声入力に対応していません'); return; }
   if (micActive) stopMic(); else startMic();
 }
 
-function startMic() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const ta = document.getElementById('note-input');
-  const baseText = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
-  let finalText = '';
-
-  recognition = new SR();
-  recognition.lang = 'ja-JP';
-  recognition.continuous = true;
-  recognition.interimResults = true;
-
-  recognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t;
-      else interim += t;
-    }
-    ta.value = baseText + finalText + interim;
-  };
-  recognition.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      showToast('マイクの使用が許可されていません');
-      stopMic();
-    } else if (e.error !== 'no-speech') {
-      showToast('音声認識エラー: ' + e.error);
-    }
-  };
-  recognition.onend = () => {
-    if (micActive) { try { recognition.start(); } catch (e) {} }
-  };
-
-  micActive = true;
-  const btn = document.getElementById('mic-btn');
-  if (btn) btn.classList.add('recording');
-  recognition.start();
+async function startMic() {
+  if (!getOpenAIKey()) { showToast('設定でOpenAI APIキーを登録してください'); showTab('settings'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const mimeType = ['audio/mp4', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    mediaRecorder = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      transcribeAudio(new Blob(audioChunks, {type: mediaRecorder.mimeType || 'audio/webm'}));
+    };
+    mediaRecorder.start();
+    micActive = true;
+    const btn = document.getElementById('mic-btn');
+    if (btn) btn.classList.add('recording');
+  } catch (e) {
+    showToast('マイクの使用が許可されていません');
+  }
 }
 
 function stopMic() {
   micActive = false;
   const btn = document.getElementById('mic-btn');
   if (btn) btn.classList.remove('recording');
-  if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+async function transcribeAudio(blob) {
+  const btn = document.getElementById('mic-btn');
+  if (btn) btn.disabled = true;
+  showToast('文字起こし中...');
+  try {
+    const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+    const form = new FormData();
+    form.append('file', blob, `audio.${ext}`);
+    form.append('model', 'whisper-1');
+    form.append('language', 'ja');
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {'Authorization': `Bearer ${getOpenAIKey()}`},
+      body: form
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
+    }
+    const data = await resp.json();
+    const ta = document.getElementById('note-input');
+    const base = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
+    ta.value = base + (data.text || '');
+    showToast('文字起こし完了');
+  } catch (e) {
+    showToast('文字起こしエラー: ' + (e.message || '失敗しました'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function onGenerate() {
@@ -1112,6 +1129,10 @@ function renderSettings() {
     const status = apiKey
       ? `<span class="api-ok set">✓ 設定済み</span>`
       : `<span class="api-ok none">未設定</span>`;
+    const openaiKey = getOpenAIKey();
+    const openaiStatus = openaiKey
+      ? `<span class="api-ok set">✓ 設定済み</span>`
+      : `<span class="api-ok none">未設定</span>`;
     body.innerHTML = `
       <div class="settings-group">
         <label>Claude APIキー ${status}</label>
@@ -1120,6 +1141,11 @@ function renderSettings() {
       </div>
       <div class="settings-group">
         <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: claude-opus-4-8</div>
+      </div>
+      <div class="settings-group">
+        <label>OpenAI APIキー（音声入力用） ${openaiStatus}</label>
+        <input class="settings-input" type="password" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." oninput="autoSaveOpenAIKey(this)" onpaste="setTimeout(()=>autoSaveOpenAIKey(this),0)">
+        <div class="settings-hint">メモ欄の🎤音声入力（Whisper）で使用します。OpenAI Platformで取得したキーを貼り付けてください。</div>
       </div>
       <div class="settings-group">
         <button class="btn btn-outline" onclick="doLogout()">ログアウト</button>
@@ -1190,6 +1216,19 @@ function autoSaveApiKey(input) {
   const label = input.closest('.settings-group').querySelector('label');
   if (label) {
     label.innerHTML = `Claude APIキー ${val
+      ? '<span class="api-ok set">✓ 設定済み</span>'
+      : '<span class="api-ok none">未設定</span>'}`;
+  }
+  if (val) showToast('APIキーを保存しました');
+}
+
+function autoSaveOpenAIKey(input) {
+  const val = input.value.trim();
+  const { db, doc, setDoc } = window.fb;
+  setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), {openaiApiKey: val}, {merge: true});
+  const label = input.closest('.settings-group').querySelector('label');
+  if (label) {
+    label.innerHTML = `OpenAI APIキー（音声入力用） ${val
       ? '<span class="api-ok set">✓ 設定済み</span>'
       : '<span class="api-ok none">未設定</span>'}`;
   }
