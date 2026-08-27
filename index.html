@@ -178,12 +178,44 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .empty{text-align:center;padding:48px 24px;color:var(--gray);}
 .empty .big{font-size:48px;margin-bottom:12px;}
 .empty p{font-size:14px;line-height:1.6;}
+
+/* LOGIN */
+body.logged-out .bottom-nav{display:none;}
+.login-wrap{max-width:360px;margin:0 auto;width:100%;padding:48px 24px;}
+.login-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--gray);text-align:center;margin-bottom:24px;}
+.login-error{color:var(--red);font-size:13px;margin-top:10px;text-align:center;min-height:16px;}
+
+/* MIC BUTTON */
+.note-row{display:flex;gap:8px;align-items:flex-start;}
+.note-row .note-input{flex:1;}
+.mic-btn{width:44px;height:44px;flex-shrink:0;font-size:20px;border:2px solid var(--gray-bd);border-radius:var(--r-sm);background:var(--white);cursor:pointer;}
+.mic-btn.recording{border-color:var(--red);color:var(--red);animation:mic-pulse 1s infinite;}
+@keyframes mic-pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 </style>
 </head>
 <body>
 
+<!-- ── LOGIN SCREEN ── -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-title">保護者連絡</div>
+    <div class="login-sub">ログインしてください</div>
+    <div class="settings-group" style="margin:0 0 12px;">
+      <label>メールアドレス</label>
+      <input class="settings-input" type="email" id="login-email" autocomplete="username">
+    </div>
+    <div class="settings-group" style="margin:0 0 16px;">
+      <label>パスワード</label>
+      <input class="settings-input" type="password" id="login-password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-blue" onclick="doLogin()">ログイン</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
 <!-- ── HOME SCREEN ── -->
-<div id="screen-home" class="screen active">
+<div id="screen-home" class="screen">
   <div class="page-hd">
     <h1>保護者連絡</h1>
     <div class="page-hd-sub" id="home-month-label"></div>
@@ -236,7 +268,10 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
     <div class="create-step">
       <div class="step-label" id="step3-label">Step 3 · 一言メモ（教科・様子など）</div>
       <div class="note-wrap">
-        <textarea class="note-input" id="note-input" rows="3" placeholder="例: 今日は数学、集中して取り組んでいた。発言も多かった。&#10;例: 英語の小テストで満点だった。"></textarea>
+        <div class="note-row">
+          <textarea class="note-input" id="note-input" rows="3" placeholder="例: 今日は数学、集中して取り組んでいた。発言も多かった。&#10;例: 英語の小テストで満点だった。"></textarea>
+          <button type="button" class="mic-btn" id="mic-btn" onclick="toggleMic()" title="音声入力">🎤</button>
+        </div>
       </div>
     </div>
 
@@ -357,6 +392,37 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 <!-- ── TOAST ── -->
 <div class="toast" id="toast"></div>
 
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {
+  initializeFirestore, persistentLocalCache,
+  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBiKH5SPENyNSb9vJRikTMmbDK7e0rZWp0",
+  authDomain: "hogosha-report.firebaseapp.com",
+  projectId: "hogosha-report",
+  storageBucket: "hogosha-report.firebasestorage.app",
+  messagingSenderId: "6240868565",
+  appId: "1:6240868565:web:3c2d098336a5fd9d78ea5c"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { localCache: persistentLocalCache() });
+
+window.fb = {
+  auth, db,
+  signInWithEmailAndPassword, onAuthStateChanged, signOut,
+  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch
+};
+window.dispatchEvent(new Event('fb-ready'));
+</script>
+
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────
 const LEVELS = ['高校生', '中学生', '小学生'];
@@ -430,12 +496,9 @@ function load(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) ?? def; }
   catch { return def; }
 }
-function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-function getStudents() { return load(K.students, []); }
-function getReports()  { return load(K.reports, []); }
-function getApiKey()   { return localStorage.getItem(K.apiKey) || ''; }
-function getStyles() {
-  const raw = load(K.styles, {});
+
+// Legacy localStorage shape → normalized {class:[], test:[]} per level (used for one-time migration only)
+function normalizeLegacyStyles(raw) {
   const out = {};
   LEVELS.forEach(lv => {
     const v = raw[lv];
@@ -453,6 +516,139 @@ function getStyles() {
   return out;
 }
 
+function getStudents() { return studentsCache; }
+function getReports()  { return reportsCache; }
+function getApiKey()   { return settingsCache.apiKey || ''; }
+function getStyles()   { return stylesCache; }
+
+// ─── FIREBASE SYNC ──────────────────────────────────────────
+function normalizeStyleDocs(docs) {
+  const out = {};
+  LEVELS.forEach(lv => out[lv] = {class: [], test: []});
+  docs.forEach(sp => {
+    if (!out[sp.level]) return;
+    const type = sp.type === 'test' ? 'test' : 'class';
+    out[sp.level][type].push({id: sp.id, text: sp.text});
+  });
+  return out;
+}
+
+function rerenderCurrentScreen() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  if (active.id === 'screen-home')     renderHome();
+  if (active.id === 'screen-history')  renderHistory();
+  if (active.id === 'screen-settings') renderSettings();
+}
+
+function subscribeAll(uid) {
+  const { db, collection, doc, onSnapshot } = window.fb;
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'students'), snap => {
+    studentsCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'reports'), snap => {
+    reportsCache = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a,b) => (b.sentAt||'').localeCompare(a.sentAt||''));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'styles'), snap => {
+    stylesCache = normalizeStyleDocs(snap.docs.map(d => ({id: d.id, ...d.data()})));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(doc(db, 'users', uid, 'settings', 'main'), d => {
+    settingsCache = d.exists() ? d.data() : {};
+    rerenderCurrentScreen();
+  }));
+}
+
+function unsubscribeAll() {
+  fsUnsubs.forEach(u => u());
+  fsUnsubs = [];
+  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {};
+}
+
+async function migrateLocalDataIfNeeded(uid) {
+  if (localStorage.getItem('pr_migrated')) return;
+  const localStudents  = load(K.students, []);
+  const localReports   = load(K.reports, []);
+  const localStyles    = normalizeLegacyStyles(load(K.styles, {}));
+  const localApiKey    = localStorage.getItem(K.apiKey) || '';
+  const hasStyles = LEVELS.some(lv => localStyles[lv].class.length || localStyles[lv].test.length);
+
+  if (!localStudents.length && !localReports.length && !hasStyles && !localApiKey) {
+    localStorage.setItem('pr_migrated', '1');
+    return;
+  }
+
+  const { db, doc, writeBatch } = window.fb;
+  const batch = writeBatch(db);
+  localStudents.forEach(s => {
+    const { id, ...rest } = s;
+    batch.set(doc(db, 'users', uid, 'students', id), rest);
+  });
+  localReports.forEach(r => {
+    const { id, ...rest } = r;
+    batch.set(doc(db, 'users', uid, 'reports', id), rest);
+  });
+  LEVELS.forEach(lv => ['class','test'].forEach(type =>
+    (localStyles[lv][type] || []).forEach(sp =>
+      batch.set(doc(db, 'users', uid, 'styles', sp.id), {level: lv, type, text: sp.text})
+    )
+  ));
+  if (localApiKey) batch.set(doc(db, 'users', uid, 'settings', 'main'), {apiKey: localApiKey});
+
+  await batch.commit();
+  localStorage.setItem('pr_migrated', '1');
+  showToast('データをクラウドに移行しました');
+}
+
+function showLoginScreen() {
+  document.body.classList.add('logged-out');
+  ['home','history','settings','create','type'].forEach(t =>
+    document.getElementById('screen-'+t).classList.remove('active')
+  );
+  document.getElementById('screen-login').classList.add('active');
+}
+
+function hideLoginScreen() {
+  document.body.classList.remove('logged-out');
+  document.getElementById('screen-login').classList.remove('active');
+}
+
+function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!email || !pass) { errEl.textContent = 'メールアドレスとパスワードを入力してください'; return; }
+  window.fb.signInWithEmailAndPassword(window.fb.auth, email, pass).catch(e => {
+    errEl.textContent = 'ログインに失敗しました（' + (e.code || e.message) + '）';
+  });
+}
+
+function doLogout() {
+  if (!confirm('ログアウトしますか？')) return;
+  unsubscribeAll();
+  window.fb.signOut(window.fb.auth);
+}
+
+window.addEventListener('fb-ready', () => {
+  window.fb.onAuthStateChanged(window.fb.auth, async (user) => {
+    if (user) {
+      fbUser = user;
+      hideLoginScreen();
+      subscribeAll(user.uid);
+      await migrateLocalDataIfNeeded(user.uid);
+      showTab('home');
+    } else {
+      fbUser = null;
+      unsubscribeAll();
+      showLoginScreen();
+    }
+  });
+});
+
 // ─── STATE ───────────────────────────────────────────────
 let currentStudent    = null;
 let currentReportType = 'class';
@@ -460,6 +656,18 @@ let selectedEval      = null;
 let selectedChips     = [];
 let settingsTabNow    = 'api';
 let modalReportId     = null;
+
+// Firebase-backed data caches (populated by onSnapshot)
+let fbUser        = null;
+let studentsCache = [];
+let reportsCache  = [];
+let stylesCache   = {};
+let settingsCache = {};
+let fsUnsubs      = [];
+
+// Voice input
+let recognition = null;
+let micActive   = false;
 
 // ─── UTILS ───────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -500,6 +708,7 @@ function esc(s) {
 
 // ─── NAVIGATION ──────────────────────────────────────────
 function hideAllScreens() {
+  stopMic();
   ['home','history','settings','create','type'].forEach(t =>
     document.getElementById('screen-'+t).classList.remove('active')
   );
@@ -628,6 +837,8 @@ function startCreateForm(studentId, reportType) {
   document.getElementById('create-slevel').innerHTML =
     `<span class="badge badge-${s.level}">${s.level}</span> ${typeBadge}`;
   document.getElementById('note-input').value = '';
+  const micBtn = document.getElementById('mic-btn');
+  if (micBtn) micBtn.style.display = supportsSpeech() ? '' : 'none';
 
   const step3Label = document.getElementById('step3-label');
   const noteInput  = document.getElementById('note-input');
@@ -677,6 +888,61 @@ function toggleChip(el) {
   else            { selectedChips.splice(idx,1); el.classList.remove('sel'); }
 }
 
+// ─── VOICE INPUT ─────────────────────────────────────────
+function supportsSpeech() {
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function toggleMic() {
+  if (!supportsSpeech()) { showToast('このブラウザは音声入力に対応していません'); return; }
+  if (micActive) stopMic(); else startMic();
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ta = document.getElementById('note-input');
+  const baseText = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
+  let finalText = '';
+
+  recognition = new SR();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    ta.value = baseText + finalText + interim;
+  };
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      showToast('マイクの使用が許可されていません');
+      stopMic();
+    } else if (e.error !== 'no-speech') {
+      showToast('音声認識エラー: ' + e.error);
+    }
+  };
+  recognition.onend = () => {
+    if (micActive) { try { recognition.start(); } catch (e) {} }
+  };
+
+  micActive = true;
+  const btn = document.getElementById('mic-btn');
+  if (btn) btn.classList.add('recording');
+  recognition.start();
+}
+
+function stopMic() {
+  micActive = false;
+  const btn = document.getElementById('mic-btn');
+  if (btn) btn.classList.remove('recording');
+  if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; }
+}
+
 async function onGenerate() {
   if (!selectedEval) { showToast('全体評価を選んでください'); return; }
   const apiKey = getApiKey();
@@ -708,12 +974,11 @@ function onCopy() {
   navigator.clipboard.writeText(text).then(() => showToast('コピーしました'));
 }
 
-function onMarkSent() {
+async function onMarkSent() {
   const text = document.getElementById('result-ta').value;
   if (!text) { showToast('先に文章を生成してください'); return; }
-  const reports = getReports();
-  reports.unshift({
-    id: uid(),
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'reports', uid()), {
     studentId:   currentStudent.id,
     studentName: currentStudent.name,
     level:       currentStudent.level,
@@ -721,7 +986,6 @@ function onMarkSent() {
     body:        text,
     sentAt:      new Date().toISOString()
   });
-  save(K.reports, reports);
   navigator.clipboard.writeText(text).catch(() => {});
   showToast('送信済みに記録しました');
   setTimeout(() => goHome(), 800);
@@ -822,11 +1086,11 @@ function copyReportModal() {
   navigator.clipboard.writeText(text).then(() => showToast('コピーしました'));
 }
 
-function deleteReportModal() {
+async function deleteReportModal() {
   if (!confirm('この履歴を削除しますか？')) return;
-  save(K.reports, getReports().filter(r => r.id !== modalReportId));
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'reports', modalReportId));
   closeModal('modal-report');
-  renderHistory();
   showToast('削除しました');
 }
 
@@ -856,6 +1120,9 @@ function renderSettings() {
       </div>
       <div class="settings-group">
         <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: claude-opus-4-8</div>
+      </div>
+      <div class="settings-group">
+        <button class="btn btn-outline" onclick="doLogout()">ログアウト</button>
       </div>`;
     return;
   }
@@ -918,7 +1185,8 @@ function renderSettings() {
 
 function autoSaveApiKey(input) {
   const val = input.value.trim();
-  localStorage.setItem(K.apiKey, val);
+  const { db, doc, setDoc } = window.fb;
+  setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), {apiKey: val}, {merge: true});
   const label = input.closest('.settings-group').querySelector('label');
   if (label) {
     label.innerHTML = `Claude APIキー ${val
@@ -949,34 +1217,23 @@ function editStyleSample(level, type, id) {
   openModal('modal-style');
 }
 
-function saveStyleSample() {
+async function saveStyleSample() {
   const text = document.getElementById('msty-text').value.trim();
   if (!text) { showToast('文例を入力してください'); return; }
-  const level  = document.getElementById('msty-level').value;
-  const type   = document.getElementById('msty-type').value;
-  const id     = document.getElementById('msty-id').value;
-  const styles = getStyles();
-  if (!styles[level]) styles[level] = {class: [], test: []};
-  if (!styles[level][type]) styles[level][type] = [];
-  if (id) {
-    const idx = styles[level][type].findIndex(x => x.id === id);
-    if (idx !== -1) styles[level][type][idx].text = text;
-  } else {
-    styles[level][type].push({id: uid(), text});
-  }
-  save(K.styles, styles);
+  const level = document.getElementById('msty-level').value;
+  const type  = document.getElementById('msty-type').value;
+  const id    = document.getElementById('msty-id').value || uid();
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'styles', id), {level, type, text});
   closeModal('modal-style');
-  showToast(id ? '更新しました' : '文例を追加しました');
-  renderSettings();
+  showToast(document.getElementById('msty-id').value ? '更新しました' : '文例を追加しました');
 }
 
-function deleteStyleSample(level, type, id) {
+async function deleteStyleSample(level, type, id) {
   if (!confirm('この文例を削除しますか？')) return;
-  const styles = getStyles();
-  styles[level][type] = (styles[level][type] || []).filter(x => x.id !== id);
-  save(K.styles, styles);
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'styles', id));
   showToast('削除しました');
-  renderSettings();
 }
 
 // ─── STUDENT CRUD ────────────────────────────────────────
@@ -1002,36 +1259,28 @@ function editStudent(id) {
   openModal('modal-student');
 }
 
-function saveStudent() {
+async function saveStudent() {
   const name = document.getElementById('mst-name').value.trim();
   if (!name) { showToast('生徒名を入力してください'); return; }
-  const id       = document.getElementById('mst-id').value;
-  const students = getStudents();
+  const id  = document.getElementById('mst-id').value || uid();
   const obj = {
-    id:         id || uid(),
     name,
     parentName: document.getElementById('mst-parent').value.trim(),
     level:      document.getElementById('mst-level').value,
     note:       document.getElementById('mst-note').value.trim(),
   };
-  if (id) {
-    const idx = students.findIndex(x => x.id === id);
-    if (idx !== -1) students[idx] = obj;
-  } else {
-    students.push(obj);
-  }
-  save(K.students, students);
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'students', id), obj);
   closeModal('modal-student');
-  showToast(id ? '更新しました' : '生徒を追加しました');
-  renderSettings();
+  showToast(document.getElementById('mst-id').value ? '更新しました' : '生徒を追加しました');
 }
 
-function deleteStudent(id) {
+async function deleteStudent(id) {
   const s = getStudents().find(x => x.id === id);
   if (!s || !confirm(`「${s.name}」を削除しますか？`)) return;
-  save(K.students, getStudents().filter(x => x.id !== id));
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'students', id));
   showToast('削除しました');
-  renderSettings();
 }
 
 // ─── CLOSE MODALS ON BACKDROP CLICK ─────────────────────
@@ -1040,7 +1289,7 @@ document.querySelectorAll('.modal-overlay').forEach(el =>
 );
 
 // ─── INIT ────────────────────────────────────────────────
-renderHome();
+// App rendering starts once Firebase auth resolves (see fb-ready listener above).
 </script>
 </body>
 </html>
