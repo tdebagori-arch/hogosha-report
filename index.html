@@ -11,6 +11,7 @@
   --red:#EF4444; --red-l:#FEF2F2;
   --purple:#7C3AED; --purple-l:#F5F3FF;
   --orange:#B45309; --orange-l:#FFFBEB;
+  --teal:#0F766E; --teal-l:#F0FDFA;
   --gray:#64748B; --gray-l:#F1F5F9; --gray-bd:#E2E8F0;
   --navy:#0F172A; --white:#FFFFFF;
   --r:12px; --r-sm:8px; --nav-h:60px;
@@ -22,6 +23,7 @@
     --red:#F87171; --red-l:rgba(248,113,113,0.18);
     --purple:#A78BFA; --purple-l:rgba(167,139,250,0.18);
     --orange:#FBBF24; --orange-l:rgba(251,191,36,0.18);
+    --teal:#5EEAD4; --teal-l:rgba(94,234,212,0.16);
     --gray:#94A3B8; --gray-l:#0B1220; --gray-bd:#2A3446;
     --navy:#E2E8F0; --white:#1A2333;
   }
@@ -67,7 +69,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .sc-info{flex:1;min-width:0;}
 .sc-name{font-size:16px;font-weight:600;}
 .sc-meta{font-size:12px;color:var(--gray);margin-top:2px;}
-.sc-badges{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.sc-badges{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;}
 .sc-arrow{color:var(--gray);font-size:18px;}
 
 /* BADGES */
@@ -77,7 +79,20 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .badge-小学生{background:var(--green-l);color:#065F46;}
 .badge-sent{background:var(--green-l);color:var(--green);}
 .badge-unsent{background:var(--red-l);color:var(--red);}
+.badge-optional{background:var(--gray-l);color:var(--gray);border:1px dashed var(--gray-bd);}
+
+/* LEVEL TABS (home) */
+.level-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;overflow-x:auto;padding:0 8px;}
+.level-tab{flex:1;min-width:72px;border:none;background:none;padding:12px 6px 10px;font-size:14px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
+.level-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.level-tab .lt-count{font-size:11px;font-weight:700;background:var(--gray-l);color:var(--gray);border-radius:10px;padding:1px 7px;}
+.level-tab .lt-count.has-unsent{background:var(--red-l);color:var(--red);}
+.grade-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;gap:6px;overflow-x:auto;padding:8px 16px;}
+.grade-tab{flex-shrink:0;border:1px solid var(--gray-bd);background:var(--white);color:var(--navy);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.grade-tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.grade-tab .gt-unsent{font-size:10px;font-weight:700;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;line-height:16px;}
 .badge-type-class{background:var(--gray-l);color:var(--gray);}
+.badge-type-pretest{background:var(--teal-l);color:var(--teal);}
 .badge-type-test{background:var(--orange-l);color:var(--orange);}
 
 /* TYPE SELECT */
@@ -235,8 +250,10 @@ body.logged-out .bottom-nav{display:none;}
     <h1>保護者連絡</h1>
     <div class="page-hd-sub" id="home-month-label"></div>
   </div>
+  <div class="level-tabs" id="home-level-tabs"></div>
+  <div class="grade-tabs" id="home-grade-tabs" hidden></div>
   <div class="stat-bar">
-    <div class="stat-item"><div class="stat-num blue" id="stat-total">0</div><div class="stat-label">全生徒</div></div>
+    <div class="stat-item"><div class="stat-num blue" id="stat-total">0</div><div class="stat-label" id="stat-total-label">全生徒</div></div>
     <div class="stat-item"><div class="stat-num green" id="stat-sent">0</div><div class="stat-label">送信済</div></div>
     <div class="stat-item"><div class="stat-num red" id="stat-unsent">0</div><div class="stat-label">未送信</div></div>
   </div>
@@ -373,11 +390,15 @@ body.logged-out .bottom-nav{display:none;}
     </div>
     <div class="settings-group">
       <label>学年区分 <span style="color:var(--red)">*</span></label>
-      <select class="settings-input" id="mst-level">
+      <select class="settings-input" id="mst-level" onchange="updateGradeOptions()">
         <option value="高校生">高校生</option>
         <option value="中学生">中学生</option>
         <option value="小学生">小学生</option>
       </select>
+    </div>
+    <div class="settings-group">
+      <label>学年</label>
+      <select class="settings-input" id="mst-grade"></select>
     </div>
     <div class="settings-group">
       <label>メモ（任意）</label>
@@ -453,12 +474,33 @@ window.dispatchEvent(new Event('fb-ready'));
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────
 const LEVELS = ['高校生', '中学生', '小学生'];
+const GRADE_COUNT = {'高校生': 3, '中学生': 3, '小学生': 6};
+const LEVEL_SHORT = {'高校生': '高', '中学生': '中', '小学生': '小'};
+
+// 学年未設定の生徒は学年区分名をそのまま表示
+function gradeLabel(s) {
+  return s.grade ? `${LEVEL_SHORT[s.level] || ''}${s.grade}` : s.level;
+}
+
+function compareStudents(a, b) {
+  return (LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level))
+      || ((b.grade || 0) - (a.grade || 0))
+      || (a.name || '').localeCompare(b.name || '', 'ja');
+}
 
 const TEST_CHIPS = [
   '目標点を達成した','目標点に届かなかった','前回より点数が伸びた','点数が下がった',
   'ケアレスミスが多かった','苦手分野の克服が見られる','得意分野を伸ばせている',
   'テスト勉強に計画的に取り組めていた','準備不足が見られた','本人の手応えは良好',
   '本人はやや落ち込んでいる','次回に向けた課題が明確になった'
+];
+
+const PRETEST_CHIPS = [
+  'テスト範囲の学習が順調','計画的に準備できている','準備がやや遅れ気味',
+  '苦手分野の対策に取り組んでいる','演習量が十分','演習量が不足している',
+  '学校ワーク・提出物が完了','学校ワーク・提出物が未完了','目標点を設定した',
+  '本人のやる気が高い','不安を感じている様子','質問が増えている',
+  '自習・追加授業の利用をおすすめしたい'
 ];
 
 const LEVEL_CHIPS = {
@@ -470,6 +512,7 @@ const LEVEL_CHIPS = {
       '体調が安定している','欠席が続いている','遅刻が目立つ',
       '提出物に遅れがある','気分が不安定'
     ],
+    pretest: PRETEST_CHIPS,
     test: TEST_CHIPS
   },
   '中学生': {
@@ -479,6 +522,7 @@ const LEVEL_CHIPS = {
       '部活動に熱心','気分が安定している','体調が安定している',
       '欠席が続いている','遅刻が目立つ','提出物に遅れがある','気分が不安定'
     ],
+    pretest: PRETEST_CHIPS,
     test: TEST_CHIPS
   },
   '小学生': {
@@ -491,10 +535,16 @@ const LEVEL_CHIPS = {
   }
 };
 
-const REPORT_TYPE_LABEL = {class: '通常授業', test: 'テスト振り返り'};
+const REPORT_TYPE_LABEL = {class: '通常授業', pretest: 'テスト前', test: 'テスト振り返り'};
 
+// 作成できる報告種別（テスト前はテストのたびに送る任意の報告）
+function typesForLevel(level) {
+  return (level === '中学生' || level === '高校生') ? ['class', 'pretest', 'test'] : ['class'];
+}
+
+// 毎月の「送信済」判定に必要な報告種別
 function requiredTypesForLevel(level) {
-  return (level === '中学生' || level === '高校生') ? ['class', 'test'] : ['class'];
+  return typesForLevel(level).filter(t => t !== 'pretest');
 }
 
 function getChipsFor(level, type) {
@@ -558,10 +608,10 @@ function getStyles()    { return stylesCache; }
 // ─── FIREBASE SYNC ──────────────────────────────────────────
 function normalizeStyleDocs(docs) {
   const out = {};
-  LEVELS.forEach(lv => out[lv] = {class: [], test: []});
+  LEVELS.forEach(lv => out[lv] = {class: [], pretest: [], test: []});
   docs.forEach(sp => {
     if (!out[sp.level]) return;
-    const type = sp.type === 'test' ? 'test' : 'class';
+    const type = (sp.type === 'test' || sp.type === 'pretest') ? sp.type : 'class';
     out[sp.level][type].push({id: sp.id, text: sp.text});
   });
   return out;
@@ -674,7 +724,7 @@ async function importBackup(input) {
       batch.set(doc(db, 'users', fbUser.uid, 'reports', id || uid()), rest);
     });
     const styles = data.styles || {};
-    LEVELS.forEach(lv => ['class','test'].forEach(type =>
+    LEVELS.forEach(lv => ['class','pretest','test'].forEach(type =>
       ((styles[lv] || {})[type] || []).forEach(sp =>
         batch.set(doc(db, 'users', fbUser.uid, 'styles', sp.id || uid()), {level: lv, type, text: sp.text})
       )
@@ -773,6 +823,29 @@ function isTypeSentThisMonth(studentId, type) {
   );
 }
 
+function lastSentAt(studentId, type) {
+  return getReports()
+    .filter(r => r.studentId === studentId && (r.reportType || 'class') === type && r.sentAt)
+    .reduce((max, r) => r.sentAt > max ? r.sentAt : max, '') || null;
+}
+
+function fmtMD(iso) {
+  const d = new Date(iso);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// 種別ごとの送信状況バッジ。テスト前は任意なので未送信でも赤にせずグレー＋前回日付
+function typeStatusBadge(studentId, type, withLabel) {
+  const prefix = withLabel ? `${REPORT_TYPE_LABEL[type]}: ` : '';
+  const sent = isTypeSentThisMonth(studentId, type);
+  if (type !== 'pretest') {
+    return `<span class="badge badge-${sent?'sent':'unsent'}">${prefix}${sent?'✓送信済':'未送信'}</span>`;
+  }
+  const last = lastSentAt(studentId, type);
+  if (sent) return `<span class="badge badge-sent">${prefix}✓${fmtMD(last)}送信</span>`;
+  return `<span class="badge badge-optional">${prefix}${last ? `前回 ${fmtMD(last)}` : '未送信'}</span>`;
+}
+
 function isFullySentThisMonth(student) {
   return requiredTypesForLevel(student.level).every(t => isTypeSentThisMonth(student.id, t));
 }
@@ -828,19 +901,84 @@ function onHistorySearchInput(input) {
 }
 
 // ─── HOME ────────────────────────────────────────────────
+let homeLevelTab = (() => { try { return localStorage.getItem('pr_home_level_tab') || 'all'; } catch { return 'all'; } })();
+
+let homeGradeTab = 'all'; // 'all' | '1'〜'6' | 'none'
+
+function selectHomeLevelTab(tab) {
+  homeLevelTab = tab;
+  homeGradeTab = 'all';
+  try { localStorage.setItem('pr_home_level_tab', tab); } catch {}
+  renderHome();
+}
+
+function selectHomeGradeTab(tab) {
+  homeGradeTab = tab;
+  renderHome();
+}
+
+function matchesGradeTab(s, tab) {
+  if (tab === 'all')  return true;
+  if (tab === 'none') return !s.grade;
+  return String(s.grade) === tab;
+}
+
+// 学年区分タブを選んでいるときだけ、その下に学年タブを表示
+function renderHomeGradeTabs(levelStudents) {
+  const el = document.getElementById('home-grade-tabs');
+  if (homeLevelTab === 'all') { el.hidden = true; return; }
+  const n = GRADE_COUNT[homeLevelTab] || 0;
+  const tabs = [{key:'all', label:'全学年'},
+    ...Array.from({length: n}, (_, i) => ({key: String(i+1), label: `${LEVEL_SHORT[homeLevelTab]}${i+1}`}))];
+  if (levelStudents.some(s => !s.grade)) tabs.push({key:'none', label:'未設定'});
+  if (!tabs.some(t => t.key === homeGradeTab)) homeGradeTab = 'all';
+  el.innerHTML = tabs.map(t => {
+    const unsent = levelStudents.filter(s => matchesGradeTab(s, t.key) && !isFullySentThisMonth(s)).length;
+    return `<button class="grade-tab${t.key === homeGradeTab ? ' active' : ''}" onclick="selectHomeGradeTab('${t.key}')">${t.label}${unsent ? `<span class="gt-unsent">${unsent}</span>` : ''}</button>`;
+  }).join('');
+  el.hidden = false;
+}
+
+function renderHomeLevelTabs(allStudents) {
+  const tabs = [{key:'all', label:'すべて'}, ...LEVELS.map(lv => ({key: lv, label: lv}))];
+  document.getElementById('home-level-tabs').innerHTML = tabs.map(t => {
+    const list = t.key === 'all' ? allStudents : allStudents.filter(s => s.level === t.key);
+    const unsent = list.filter(s => !isFullySentThisMonth(s)).length;
+    const count = unsent
+      ? `<span class="lt-count has-unsent" title="未送信 ${unsent}人">${unsent}</span>`
+      : `<span class="lt-count">${list.length ? '✓' : 0}</span>`;
+    return `<button class="level-tab${t.key === homeLevelTab ? ' active' : ''}" onclick="selectHomeLevelTab('${t.key}')">${t.label}${count}</button>`;
+  }).join('');
+}
+
 function renderHome() {
-  const students = getStudents();
+  const allStudents = getStudents();
   const d = new Date();
   document.getElementById('home-month-label').textContent = `${d.getMonth()+1}月の連絡状況`;
 
+  if (homeLevelTab !== 'all' && !LEVELS.includes(homeLevelTab)) homeLevelTab = 'all';
+  renderHomeLevelTabs(allStudents);
+  const levelStudents = homeLevelTab === 'all' ? allStudents : allStudents.filter(s => s.level === homeLevelTab);
+  renderHomeGradeTabs(levelStudents);
+  const students = levelStudents.filter(s => matchesGradeTab(s, homeGradeTab));
+
   const sentCount = students.filter(s => isFullySentThisMonth(s)).length;
   document.getElementById('stat-total').textContent  = students.length;
+  document.getElementById('stat-total-label').textContent =
+    homeLevelTab === 'all' ? '全生徒'
+    : homeGradeTab === 'all' ? homeLevelTab
+    : homeGradeTab === 'none' ? '学年未設定'
+    : `${LEVEL_SHORT[homeLevelTab]}${homeGradeTab}`;
   document.getElementById('stat-sent').textContent   = sentCount;
   document.getElementById('stat-unsent').textContent = students.length - sentCount;
 
   const el = document.getElementById('home-student-list');
-  if (!students.length) {
+  if (!allStudents.length) {
     el.innerHTML = `<div class="empty"><div class="big">👥</div><p>まだ生徒が登録されていません。<br>設定 → 生徒管理から追加してください。</p></div>`;
+    return;
+  }
+  if (!students.length) {
+    el.innerHTML = `<div class="empty"><div class="big">👥</div><p>${esc(document.getElementById('stat-total-label').textContent)}の生徒はまだ登録されていません。</p></div>`;
     return;
   }
 
@@ -856,17 +994,15 @@ function renderHome() {
 
   const sorted = [...filtered].sort((a,b) => {
     const as = isFullySentThisMonth(a), bs = isFullySentThisMonth(b);
-    return as === bs ? 0 : (as ? 1 : -1);
+    if (as !== bs) return as ? 1 : -1;
+    return compareStudents(a, b);
   });
 
   el.innerHTML = sorted.map(s => {
-    const types = requiredTypesForLevel(s.level);
+    const types = typesForLevel(s.level);
     const fullySent = isFullySentThisMonth(s);
     const statusHtml = types.length > 1
-      ? types.map(t => {
-          const sent = isTypeSentThisMonth(s.id, t);
-          return `<span class="badge badge-${sent?'sent':'unsent'}">${REPORT_TYPE_LABEL[t]}: ${sent?'✓送信済':'未送信'}</span>`;
-        }).join('')
+      ? types.map(t => typeStatusBadge(s.id, t, true)).join('')
       : `<span class="badge badge-${fullySent?'sent':'unsent'}">${fullySent?'✓ 送信済':'未送信'}</span>`;
     return `<div class="student-card" onclick="startCreate('${s.id}')">
       <div class="sc-bar ${fullySent?'sent':'unsent'}"></div>
@@ -874,7 +1010,7 @@ function renderHome() {
         <div class="sc-name">${esc(s.name)}</div>
         <div class="sc-meta">${esc(s.parentName||'—')}</div>
         <div class="sc-badges">
-          <span class="badge badge-${s.level}">${s.level}</span>
+          <span class="badge badge-${s.level}">${gradeLabel(s)}</span>
           ${statusHtml}
         </div>
       </div>
@@ -887,7 +1023,7 @@ function renderHome() {
 function startCreate(studentId) {
   const s = getStudents().find(x => x.id === studentId);
   if (!s) return;
-  if (requiredTypesForLevel(s.level).length > 1) {
+  if (typesForLevel(s.level).length > 1) {
     openTypeScreen(s);
   } else {
     startCreateForm(studentId, 'class');
@@ -900,15 +1036,15 @@ function openTypeScreen(s) {
   document.getElementById('type-sparent').textContent = s.parentName ? `保護者: ${s.parentName}` : '';
 
   const sub = {
-    class: '普段の授業の様子を報告',
-    test:  'テスト結果・振り返りを報告'
+    class:   '普段の授業の様子を報告',
+    pretest: 'テストに向けた準備状況・目標を報告',
+    test:    'テスト結果・振り返りを報告'
   };
-  document.getElementById('type-cards').innerHTML = requiredTypesForLevel(s.level).map(t => {
-    const sent = isTypeSentThisMonth(s.id, t);
+  document.getElementById('type-cards').innerHTML = typesForLevel(s.level).map(t => {
     return `<div class="type-card" onclick="chooseReportType('${t}')">
       <div class="type-card-top">
         <div class="type-card-title">${REPORT_TYPE_LABEL[t]}の報告</div>
-        <span class="badge badge-${sent?'sent':'unsent'}">${sent?'✓送信済':'未送信'}</span>
+        ${typeStatusBadge(s.id, t, false)}
       </div>
       <div class="type-card-sub">${sub[t]}</div>
     </div>`;
@@ -923,7 +1059,7 @@ function chooseReportType(type) {
 }
 
 function onCreateBack() {
-  if (currentStudent && requiredTypesForLevel(currentStudent.level).length > 1) {
+  if (currentStudent && typesForLevel(currentStudent.level).length > 1) {
     openTypeScreen(currentStudent);
   } else {
     goHome();
@@ -941,11 +1077,11 @@ function startCreateForm(studentId, reportType) {
 
   document.getElementById('create-sname').textContent  = s.name;
   document.getElementById('create-sparent').textContent = s.parentName ? `保護者: ${s.parentName}` : '';
-  const typeBadge = requiredTypesForLevel(s.level).length > 1
+  const typeBadge = typesForLevel(s.level).length > 1
     ? `<span class="badge badge-type-${reportType}">${REPORT_TYPE_LABEL[reportType]}</span>`
     : '';
   document.getElementById('create-slevel').innerHTML =
-    `<span class="badge badge-${s.level}">${s.level}</span> ${typeBadge}`;
+    `<span class="badge badge-${s.level}">${gradeLabel(s)}</span> ${typeBadge}`;
   document.getElementById('note-input').value = '';
   const micBtn = document.getElementById('mic-btn');
   if (micBtn) micBtn.style.display = supportsRecording() ? '' : 'none';
@@ -956,6 +1092,10 @@ function startCreateForm(studentId, reportType) {
     step3Label.textContent = 'Step 3 · 詳細メモ（音声の文字起こしなど、そのまま貼り付け可）';
     noteInput.rows = 8;
     noteInput.placeholder = '例: (音声を文字起こしした内容をそのまま貼り付け)\n今日は数学のテスト振り返りをしました。点数は78点で目標の80点にわずかに届きませんでした。計算ミスが2問あり…';
+  } else if (reportType === 'pretest') {
+    step3Label.textContent = 'Step 3 · 詳細メモ（テスト日程・範囲・目標点・準備状況など）';
+    noteInput.rows = 8;
+    noteInput.placeholder = '例: 10/15から中間テスト。数学は方程式〜関数が範囲。目標は80点。\nワークは8割終わっている。関数の文章題が苦手なので残りの授業で重点的に演習予定。家では毎日30分ワークの見直しを…';
   } else {
     step3Label.textContent = 'Step 3 · 一言メモ（教科・様子など）';
     noteInput.rows = 3;
@@ -1138,9 +1278,10 @@ async function generateReport(student, reportType, evalType, chips, note, length
   const typeLabel = REPORT_TYPE_LABEL[reportType];
   const lengthOpt = LENGTH_OPTIONS.find(o => o.key === length) || LENGTH_OPTIONS[1];
 
-  const extraInstruction = reportType === 'test'
-    ? '追加メモには音声を文字起こししたテキストがそのまま含まれる場合があります。その中から教科名・点数・目標との比較・本人の様子など重要な情報を抽出し、簡潔で分かりやすい報告文にまとめてください。'
-    : '';
+  const extraInstruction = {
+    test:    '追加メモには音声を文字起こししたテキストがそのまま含まれる場合があります。その中から教科名・点数・目標との比較・本人の様子など重要な情報を抽出し、簡潔で分かりやすい報告文にまとめてください。',
+    pretest: 'これはテスト前の報告です。まだテスト結果は出ていないので、結果や点数を書かないでください。追加メモには音声を文字起こししたテキストがそのまま含まれる場合があります。その中からテストの日程・範囲・目標点・今の準備状況・テストまでの学習計画など重要な情報を抽出してください。必要であれば、ご家庭で声かけやサポートをお願いする一文も入れてください。'
+  }[reportType] || '';
 
   const systemPrompt = (styleSample
     ? `あなたは保護者への連絡文を書くアシスタントです。以下の例文を参考に、同じ文体・口調・言い回しで連絡文を生成してください。出力は連絡文のみ（前置き・説明なし）。\n\n【文体サンプル（${student.level}・${typeLabel}）】\n${styleSample}`
@@ -1152,7 +1293,7 @@ async function generateReport(student, reportType, evalType, chips, note, length
 
 生徒名: ${student.name}
 保護者: ${student.parentName ? student.parentName + '様' : '保護者様'}
-学年区分: ${student.level}
+学年区分: ${student.level}${student.grade ? `（${student.grade}年生）` : ''}
 報告種別: ${typeLabel}
 全体評価: ${evalType}
 具体的なポイント: ${chipsText}
@@ -1292,7 +1433,7 @@ function renderSettings() {
       <div style="padding:12px 16px 6px;font-size:13px;color:var(--gray);line-height:1.6;">
         過去に書いた報告文を追加すると、AIがその文体を真似て文章を生成します。学年区分・報告種別ごとに複数の文例を登録できます。
       </div>
-      ${LEVELS.map(lv => requiredTypesForLevel(lv).map(t => {
+      ${LEVELS.map(lv => typesForLevel(lv).map(t => {
         const samples = (styles[lv] || {})[t] || [];
         const listHtml = samples.length
           ? samples.map(sp => `
@@ -1320,13 +1461,13 @@ function renderSettings() {
   if (tab === 'students') {
     const students = getStudents();
     const listHtml = students.length
-      ? students.map(s => `
+      ? [...students].sort(compareStudents).map(s => `
           <div class="st-item">
             <div class="st-item-info">
               <div class="st-item-name">${esc(s.name)}</div>
               <div class="st-item-meta">
                 ${esc(s.parentName||'—')} ·
-                <span class="badge badge-${s.level}" style="font-size:10px;">${s.level}</span>
+                <span class="badge badge-${s.level}" style="font-size:10px;">${gradeLabel(s)}</span>
               </div>
             </div>
             <button class="icon-btn" onclick="editStudent('${s.id}')">✏️</button>
@@ -1424,8 +1565,19 @@ function openAddStudent() {
   document.getElementById('mst-name').value   = '';
   document.getElementById('mst-parent').value = '';
   document.getElementById('mst-level').value  = '中学生';
+  updateGradeOptions(null);
   document.getElementById('mst-note').value   = '';
   openModal('modal-student');
+}
+
+function updateGradeOptions(selected) {
+  const level = document.getElementById('mst-level').value;
+  const sel = document.getElementById('mst-grade');
+  const keep = selected !== undefined ? selected : Number(sel.value) || null;
+  const n = GRADE_COUNT[level] || 0;
+  sel.innerHTML = `<option value="">未設定</option>` +
+    Array.from({length: n}, (_, i) => `<option value="${i+1}">${LEVEL_SHORT[level]}${i+1}（${i+1}年生）</option>`).join('');
+  sel.value = keep && keep <= n ? String(keep) : '';
 }
 
 function editStudent(id) {
@@ -1436,6 +1588,7 @@ function editStudent(id) {
   document.getElementById('mst-name').value   = s.name;
   document.getElementById('mst-parent').value = s.parentName || '';
   document.getElementById('mst-level').value  = s.level;
+  updateGradeOptions(s.grade || null);
   document.getElementById('mst-note').value   = s.note || '';
   openModal('modal-student');
 }
@@ -1448,7 +1601,8 @@ async function saveStudent() {
     name,
     parentName: document.getElementById('mst-parent').value.trim(),
     level:      document.getElementById('mst-level').value,
-    note:       document.getElementById('mst-note').value.trim(),
+    grade:      Number(document.getElementById('mst-grade').value) || null,
+    note:     document.getElementById('mst-note').value.trim(),
   };
   const { db, doc, setDoc } = window.fb;
   await setDoc(doc(db, 'users', fbUser.uid, 'students', id), obj);
