@@ -154,6 +154,26 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .result-ta{width:100%;border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:12px;font-family:inherit;font-size:14px;line-height:1.8;resize:vertical;outline:none;min-height:160px;}
 .result-ta:focus{border-color:var(--blue);}
 
+/* NEGA CHECK & BLOG */
+.check-box{border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;line-height:1.6;background:var(--white);}
+.check-box.ok{border-color:var(--green);background:var(--green-l);}
+.check-box.warn{border-color:var(--orange);background:var(--orange-l);}
+.check-box.bad{border-color:var(--red);background:var(--red-l);}
+.check-box.loading{color:var(--gray);}
+.check-head{font-weight:700;margin-bottom:4px;}
+.check-issue{padding:8px 0;border-top:1px dashed var(--gray-bd);}
+.check-issue:first-of-type{border-top:none;}
+.check-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-right:6px;color:white;background:var(--orange);}
+.check-tag.must{background:var(--red);}
+.check-quote{font-weight:600;}
+.check-sugg{color:var(--teal);margin-top:2px;}
+.check-actions{display:flex;gap:8px;margin-top:8px;}
+.check-actions .btn{padding:9px;font-size:13px;}
+.section-sep{height:1px;background:var(--gray-bd);margin:10px 0 4px;}
+.blog-toggle{display:flex;align-items:center;gap:8px;padding:0 16px 14px;font-size:14px;}
+.blog-toggle input{width:18px;height:18px;}
+.blog-toggle select{flex:1;}
+
 /* HISTORY */
 .history-list{flex:1;overflow-y:auto;}
 .history-item{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:14px 16px;cursor:pointer;transition:background 0.1s;}
@@ -316,6 +336,19 @@ body.logged-out .bottom-nav{display:none;}
       <div class="chip-wrap" id="length-chip-wrap"></div>
     </div>
 
+    <!-- STEP 5: Blog -->
+    <div class="create-step">
+      <div class="step-label">Step 5 · ブログ記事</div>
+      <label class="blog-toggle">
+        <input type="checkbox" id="blog-enable" onchange="onBlogToggle(this)">
+        <span>報告文からブログ記事も作る</span>
+      </label>
+      <div class="blog-toggle" id="blog-teacher-row">
+        <span style="font-size:13px;color:var(--gray);">担当</span>
+        <select class="settings-input" id="blog-teacher" onchange="onBlogTeacherChange(this)"></select>
+      </div>
+    </div>
+
     <!-- GENERATE -->
     <div class="gen-wrap">
       <button class="btn btn-blue" id="gen-btn" onclick="onGenerate()">✨ AI生成</button>
@@ -325,11 +358,24 @@ body.logged-out .bottom-nav{display:none;}
     <div id="result-section">
       <div class="result-label">生成された報告文</div>
       <textarea class="result-ta" id="result-ta" rows="7"></textarea>
+      <div class="check-box" id="report-check" hidden></div>
       <div class="btn-row">
         <button class="btn btn-outline" onclick="onCopy()">📋 コピー</button>
         <button class="btn btn-green" onclick="onMarkSent()">✓ 送信済みにする</button>
       </div>
       <button class="btn btn-outline" onclick="onGenerate()" style="margin-top:0;">🔄 再生成</button>
+
+      <div id="blog-section" hidden>
+        <div class="section-sep"></div>
+        <div class="result-label">ブログ記事（公開用・個人名なし）</div>
+        <textarea class="result-ta" id="blog-ta" rows="10"></textarea>
+        <div class="check-box" id="blog-check" hidden></div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="onCopyBlog()">📋 コピー</button>
+          <button class="btn btn-outline" onclick="onRegenerateBlog()">🔄 書き直す</button>
+        </div>
+        <a class="btn btn-blue" href="https://meiseikobetsu.jp/blog-post.php" target="_blank" rel="noopener" style="text-decoration:none;">📝 ブログ投稿画面を開く</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1121,9 +1167,24 @@ function startCreateForm(studentId, reportType) {
     `<div class="chip${o.key === selectedLength ? ' sel' : ''}" data-length="${o.key}" onclick="selectLength(this)">${o.label}</div>`
   ).join('');
 
+  // Blog options
+  const blogEnabled = settingsCache.blogEnabled !== false;
+  document.getElementById('blog-enable').checked = blogEnabled;
+  const teacherSel = document.getElementById('blog-teacher');
+  const curTeacher = settingsCache.blogTeacher || DEFAULT_BLOG_TEACHER;
+  teacherSel.innerHTML = BLOG_TEACHERS.map(t =>
+    `<option value="${esc(t)}"${t === curTeacher ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  document.getElementById('blog-teacher-row').style.display = blogEnabled ? '' : 'none';
+
   // Hide result
+  genSeq++;
   document.getElementById('result-section').classList.remove('visible');
   document.getElementById('result-ta').value = '';
+  document.getElementById('blog-ta').value = '';
+  document.getElementById('blog-section').hidden = true;
+  ['report-check','blog-check'].forEach(id => {
+    const el = document.getElementById(id); el.hidden = true; el.innerHTML = '';
+  });
 
   // Show create screen, hide others
   hideAllScreens();
@@ -1225,25 +1286,268 @@ async function onGenerate() {
   const apiKey = getApiKey();
   if (!apiKey) { showToast('設定でAPIキーを登録してください'); showTab('settings'); return; }
 
+  const seq = ++genSeq;
+  const student = currentStudent;
+  const note = document.getElementById('note-input').value.trim();
+  const wantBlog = document.getElementById('blog-enable').checked;
+
   setLoading(true);
+  let text;
   try {
-    const text = await generateReport(
-      currentStudent,
-      currentReportType,
-      selectedEval,
-      selectedChips,
-      document.getElementById('note-input').value.trim(),
-      selectedLength
-    );
-    document.getElementById('result-ta').value = text;
-    const rs = document.getElementById('result-section');
-    rs.classList.add('visible');
-    setTimeout(() => rs.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
+    text = await generateReport(student, currentReportType, selectedEval, selectedChips, note, selectedLength);
   } catch(e) {
     showToast('エラー: ' + (e.message || '生成に失敗しました'));
-  } finally {
     setLoading(false);
+    return;
   }
+  setLoading(false);
+  if (seq !== genSeq) return;
+
+  document.getElementById('result-ta').value = text;
+  const rs = document.getElementById('result-section');
+  rs.classList.add('visible');
+  setTimeout(() => rs.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
+
+  // 報告文のネガチェ と ブログ生成 を並行で実行
+  const blogSection = document.getElementById('blog-section');
+  blogSection.hidden = !wantBlog;
+  document.getElementById('blog-ta').value = '';
+  document.getElementById('blog-check').hidden = true;
+  const jobs = [runCheck('report', seq)];
+  if (wantBlog) jobs.push(generateBlogAndCheck(student, text, note, seq));
+  await Promise.all(jobs);
+}
+
+// ─── CLAUDE API 共通 ──────────────────────────────────────
+async function callClaude(system, user, maxTokens) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': getApiKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{role: 'user', content: user}]
+    })
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
+  }
+  const data = await resp.json();
+  return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+}
+
+// ─── ブログ記事生成 ───────────────────────────────────────
+const BLOG_TEACHERS = [
+  '宮永先生（ミヤ）','高山先生（そうご）','白田先生（おいたん）','伊藤先生（いとぅー）',
+  '村上先生（ASK）','米本先生（ヨネ）','宮下先生（けんご）','飯塚先生（づかっち）',
+  '沼田先生（ぬま）','菅原先生（ゆめ）','杏樹先生（あんじゅ）'
+];
+const DEFAULT_BLOG_TEACHER = '高山先生（そうご）';
+const CLAUDE_MODEL = 'claude-opus-4-8';
+let genSeq = 0;
+
+function onBlogToggle(el) {
+  document.getElementById('blog-teacher-row').style.display = el.checked ? '' : 'none';
+  saveSetting({blogEnabled: el.checked});
+}
+function onBlogTeacherChange(el) { saveSetting({blogTeacher: el.value}); }
+
+function saveSetting(obj) {
+  Object.assign(settingsCache, obj);
+  const { db, doc, setDoc } = window.fb;
+  return setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), obj, {merge: true});
+}
+
+function blogGradeLabel(s) {
+  if (s.level === '小学生') return s.grade ? `小学${s.grade}年生` : '小学生';
+  if (s.level === '中学生') return s.grade ? `中学${s.grade}年生` : '中学生';
+  if (s.level === '高校生') return s.grade ? `高校${s.grade}年生` : '高校生';
+  return s.level || '';
+}
+
+function getBlogSamples() {
+  return (settingsCache.blogSamples || '').split(/\n-{3,}\n/).map(t => t.trim()).filter(Boolean);
+}
+
+async function generateBlog(student, reportText, note) {
+  const teacher = document.getElementById('blog-teacher').value || DEFAULT_BLOG_TEACHER;
+  const samples = getBlogSamples();
+  const system = `あなたは個別指導塾「EIMEI」の講師ブログ「生徒自慢ブログ」の記事を書くアシスタントです。
+講師が日々の指導で見た生徒の頑張りを、塾のホームページで紹介する記事を書きます。読者は在籍生の保護者と、入塾を検討しているご家庭です。
+
+ルール:
+- 書き手は「${teacher}」。講師本人の一人称で、熱血・温かみ・ユーモアのあるトーンで書く。
+- 生徒の名前（姓・名・あだ名・イニシャル）、保護者名、学校名、部活のチーム名、住所など、個人が特定できる情報は絶対に書かない。生徒は「${blogGradeLabel(student)}の生徒」「この生徒」などと表す。
+- 点数や順位は、本人が特定されない範囲で、前向きな文脈なら書いてよい。
+- 保護者向け報告に含まれる課題・注意点・体調・欠席などのネガティブな内容は、公開記事には書かない。頑張っている点と今後への期待に焦点を当てる。
+- 他の生徒・学校・他塾を下げる表現は使わない。
+- 出力形式は次のとおり。前置きや説明は書かない。
+タイトル：（30字以内）
+
+（本文：400〜600字程度。最後に生徒への応援メッセージで締める）`
+    + (samples.length ? `\n\n【過去記事の文体サンプル（文体・構成を真似る）】\n${samples.join('\n\n---\n\n')}` : '');
+
+  const user = `以下の保護者向け報告文と指導メモをもとに、ブログ記事を書いてください。
+
+学年: ${blogGradeLabel(student)}
+
+【保護者向け報告文】
+${reportText}
+
+【指導メモ・文字起こし】
+${note || '（なし）'}`;
+  return callClaude(system, user, 1500);
+}
+
+async function generateBlogAndCheck(student, reportText, note, seq) {
+  const box = document.getElementById('blog-check');
+  box.hidden = false;
+  box.className = 'check-box loading';
+  box.textContent = '✍️ ブログ記事を作成中...';
+  try {
+    const blog = await generateBlog(student, reportText, note);
+    if (seq !== genSeq) return;
+    document.getElementById('blog-ta').value = blog;
+  } catch (e) {
+    if (seq !== genSeq) return;
+    box.className = 'check-box bad';
+    box.textContent = 'ブログ生成エラー: ' + (e.message || '失敗しました');
+    return;
+  }
+  await runCheck('blog', seq);
+}
+
+async function onRegenerateBlog() {
+  if (!currentStudent) return;
+  const reportText = document.getElementById('result-ta').value.trim();
+  if (!reportText) { showToast('先に報告文を生成してください'); return; }
+  const seq = genSeq;
+  await generateBlogAndCheck(currentStudent, reportText, document.getElementById('note-input').value.trim(), seq);
+}
+
+function onCopyBlog() {
+  const text = document.getElementById('blog-ta').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast('ブログ記事をコピーしました'));
+}
+
+// ─── ネガチェック ─────────────────────────────────────────
+const lastRevised = {report: '', blog: ''};
+
+function nameParts(student) {
+  const parts = [];
+  [student.name, student.parentName].forEach(n => {
+    if (!n) return;
+    const t = n.trim();
+    parts.push(t.replace(/\s+/g, ''));
+    t.split(/[\s　]+/).forEach(p => { if (p.length >= 2) parts.push(p); });
+  });
+  return [...new Set(parts)];
+}
+
+function getNgWords() {
+  return (settingsCache.ngWords || '').split(/[\n,、]+/).map(w => w.trim()).filter(Boolean);
+}
+
+function localCheck(kind, text, student) {
+  const issues = [];
+  getNgWords().forEach(w => {
+    if (text.includes(w)) issues.push({level: '要修正', quote: w, reason: '登録したNGワードが含まれています', suggestion: '別の表現に言い換えてください'});
+  });
+  if (kind === 'blog') {
+    nameParts(student).forEach(p => {
+      if (text.includes(p)) issues.push({level: '要修正', quote: p, reason: '公開記事に生徒・保護者の名前が含まれています', suggestion: '名前を削除してください'});
+    });
+  }
+  return issues;
+}
+
+async function aiCheck(kind, text, student, note) {
+  const common = `指摘は本当に直すべきものだけに絞り、問題がなければ issues を空にしてください。
+出力は次のJSONのみ（コードブロック・前置きなし）:
+{"issues":[{"level":"要修正"または"注意","quote":"問題箇所の原文そのまま（短く）","reason":"理由","suggestion":"修正案"}],"revised":"指摘をすべて反映した全文（問題がなければ空文字）"}`;
+  const system = kind === 'report'
+    ? `あなたは塾から保護者へ送る連絡文の最終チェック担当です。次の観点で文章をチェックしてください。
+- 保護者を不安にさせる・責めていると受け取られる表現、生徒を否定・断定的に批判する表現
+- 他の生徒の名前や、他の生徒との比較
+- 指導メモにない事実の捏造、メモとの食い違い（点数・教科・日付など）
+- 生徒名・保護者名の誤り（正しくは 生徒「${student.name}」保護者「${student.parentName || '未登録'}」）
+- 敬語の誤り、誤字脱字、不自然な日本語
+- 塾内部の事情など保護者に送るべきでない内容
+${common}`
+    : `あなたは塾のホームページに公開するブログ記事の最終チェック担当です。次の観点で文章をチェックしてください。
+- 個人が特定できる情報（生徒名・あだ名・イニシャル・保護者名・学校名・部活チーム名・地名など）。この生徒の本名は「${student.name}」、保護者は「${student.parentName || '未登録'}」
+- 生徒の課題・欠席・体調・成績不振などネガティブな内容
+- 他の生徒・学校・他塾を下げる表現、誇大広告や合格保証と受け取られる表現
+- 指導メモにない事実の捏造
+- 誤字脱字、不自然な日本語
+${common}`;
+  const user = `【チェック対象】\n${text}\n\n【参考：指導メモ・文字起こし】\n${note || '（なし）'}`;
+  const raw = await callClaude(system, user, 2500);
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('チェック結果を読み取れませんでした');
+  const parsed = JSON.parse(m[0]);
+  return {issues: Array.isArray(parsed.issues) ? parsed.issues : [], revised: parsed.revised || ''};
+}
+
+async function runCheck(kind, seq) {
+  const ta  = document.getElementById(kind === 'report' ? 'result-ta' : 'blog-ta');
+  const box = document.getElementById(kind === 'report' ? 'report-check' : 'blog-check');
+  const text = ta.value.trim();
+  if (!text || !currentStudent) return;
+  const student = currentStudent;
+  const note = document.getElementById('note-input').value.trim();
+  box.hidden = false;
+  box.className = 'check-box loading';
+  box.textContent = '🛡️ ネガチェック中...';
+
+  const local = localCheck(kind, text, student);
+  let ai = {issues: [], revised: ''};
+  let aiError = '';
+  try { ai = await aiCheck(kind, text, student, note); }
+  catch (e) { aiError = e.message || 'チェックに失敗しました'; }
+  if (seq !== genSeq || ta.value.trim() !== text) return; // 途中で再生成・編集された
+
+  const issues = [...local, ...ai.issues];
+  lastRevised[kind] = ai.revised;
+  const hasMust = issues.some(i => i.level === '要修正');
+  const title = kind === 'report' ? '報告文' : 'ブログ記事';
+
+  if (aiError) {
+    box.className = 'check-box warn';
+  } else {
+    box.className = 'check-box ' + (!issues.length ? 'ok' : hasMust ? 'bad' : 'warn');
+  }
+  const head = aiError
+    ? `⚠️ AIチェックに失敗しました（${esc(aiError)}）。目視で確認してください`
+    : !issues.length ? `✅ ${title}：ネガチェックOK` : `🛡️ ${title}：${issues.length}件の指摘`;
+  box.innerHTML = `<div class="check-head">${head}</div>` +
+    issues.map(i => `
+      <div class="check-issue">
+        <span class="check-tag${i.level === '要修正' ? ' must' : ''}">${esc(i.level || '注意')}</span>
+        <span class="check-quote">「${esc(i.quote || '')}」</span>
+        <div>${esc(i.reason || '')}</div>
+        ${i.suggestion ? `<div class="check-sugg">→ ${esc(i.suggestion)}</div>` : ''}
+      </div>`).join('') +
+    `<div class="check-actions">
+      ${ai.revised ? `<button class="btn btn-green" onclick="applyRevised('${kind}')">✏️ 修正版を反映</button>` : ''}
+      <button class="btn btn-outline" onclick="runCheck('${kind}', genSeq)">🔁 再チェック</button>
+    </div>`;
+}
+
+function applyRevised(kind) {
+  const revised = lastRevised[kind];
+  if (!revised) return;
+  document.getElementById(kind === 'report' ? 'result-ta' : 'blog-ta').value = revised;
+  showToast('修正版を反映しました');
+  runCheck(kind, genSeq);
 }
 
 function onCopy() {
@@ -1262,6 +1566,7 @@ async function onMarkSent() {
     level:       currentStudent.level,
     reportType:  currentReportType,
     body:        text,
+    blogBody:    document.getElementById('blog-ta').value || '',
     sentAt:      new Date().toISOString()
   });
   navigator.clipboard.writeText(text).catch(() => {});
@@ -1301,28 +1606,7 @@ async function generateReport(student, reportType, evalType, chips, note, length
 
 連絡文のみ出力してください。`;
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-8',
-      max_tokens: lengthOpt.tokens,
-      system: systemPrompt,
-      messages: [{role: 'user', content: userPrompt}]
-    })
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
-  }
-  const data = await resp.json();
-  return data.content[0].text;
+  return callClaude(systemPrompt, userPrompt, lengthOpt.tokens);
 }
 
 // ─── HISTORY ─────────────────────────────────────────────
@@ -1454,6 +1738,19 @@ function renderSettings() {
             <button class="btn btn-outline" onclick="openAddStyleSample('${lv}','${t}')">＋ ${lv}・${REPORT_TYPE_LABEL[t]}の文例を追加</button>
           </div>`;
       }).join('')).join('')}
+      <div class="settings-group" style="margin-top:28px;">
+        <label>ブログ記事の文体サンプル</label>
+        <textarea class="settings-ta" id="blog-samples-input" rows="8" placeholder="過去に公開したブログ記事を貼り付けてください。複数ある場合は「---」だけの行で区切ります。">${esc(settingsCache.blogSamples || '')}</textarea>
+        <div class="settings-hint">ブログ記事を作るとき、この文体・構成を真似します。</div>
+      </div>
+      <div class="settings-group">
+        <label>NGワード（ネガチェック用）</label>
+        <textarea class="settings-ta" id="ng-words-input" rows="4" placeholder="1行に1つ、または「、」区切り&#10;例: 怠けている、やる気がない、他塾">${esc(settingsCache.ngWords || '')}</textarea>
+        <div class="settings-hint">報告文・ブログ記事にこの言葉が入っていたら「要修正」として表示します。</div>
+      </div>
+      <div class="settings-group">
+        <button class="btn btn-blue" onclick="saveBlogSettings()">ブログ・NGワード設定を保存</button>
+      </div>
     `;
     return;
   }
@@ -1503,6 +1800,14 @@ function autoSaveApiKey(input) {
       : '<span class="api-ok none">未設定</span>'}`;
   }
   if (val) showToast('APIキーを保存しました');
+}
+
+async function saveBlogSettings() {
+  await saveSetting({
+    blogSamples: document.getElementById('blog-samples-input').value.trim(),
+    ngWords:     document.getElementById('ng-words-input').value.trim(),
+  });
+  showToast('保存しました');
 }
 
 function autoSaveOpenAIKey(input) {
