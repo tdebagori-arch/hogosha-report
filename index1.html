@@ -1,0 +1,2207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>保護者連絡</title>
+<style>
+:root {
+  --blue:#2563EB; --blue-dk:#1D4ED8; --blue-l:#EFF6FF;
+  --green:#10B981; --green-l:#ECFDF5;
+  --red:#EF4444; --red-l:#FEF2F2;
+  --purple:#7C3AED; --purple-l:#F5F3FF;
+  --orange:#B45309; --orange-l:#FFFBEB;
+  --teal:#0F766E; --teal-l:#F0FDFA;
+  --gray:#64748B; --gray-l:#F1F5F9; --gray-bd:#E2E8F0;
+  --navy:#0F172A; --white:#FFFFFF;
+  --r:12px; --r-sm:8px; --nav-h:60px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --blue:#3B82F6; --blue-dk:#93C5FD; --blue-l:rgba(59,130,246,0.18);
+    --green:#34D399; --green-l:rgba(52,211,153,0.18);
+    --red:#F87171; --red-l:rgba(248,113,113,0.18);
+    --purple:#A78BFA; --purple-l:rgba(167,139,250,0.18);
+    --orange:#FBBF24; --orange-l:rgba(251,191,36,0.18);
+    --teal:#5EEAD4; --teal-l:rgba(94,234,212,0.16);
+    --gray:#94A3B8; --gray-l:#0B1220; --gray-bd:#2A3446;
+    --navy:#E2E8F0; --white:#1A2333;
+  }
+  .badge-小学生{color:#6EE7B7;}
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;background:var(--gray-l);color:var(--navy);min-height:100dvh;padding-bottom:var(--nav-h);}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:var(--white);border-top:1px solid var(--gray-bd);display:flex;z-index:100;}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--gray);border:none;background:none;font-size:10px;font-weight:600;transition:color 0.15s;}
+.nav-tab .ni{font-size:22px;line-height:1;}
+.nav-tab.active{color:var(--blue);}
+
+/* SCREENS */
+.screen{display:none;flex-direction:column;min-height:calc(100dvh - var(--nav-h));}
+.screen.active{display:flex;}
+
+/* PAGE HEADER */
+.page-hd{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:14px 16px;position:sticky;top:0;z-index:50;}
+.page-hd h1{font-size:18px;font-weight:700;}
+.page-hd-sub{font-size:12px;color:var(--gray);margin-top:1px;}
+
+/* SEARCH BAR */
+.search-bar{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:10px 16px;}
+
+/* STAT BAR */
+.stat-bar{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;padding:14px 20px;gap:24px;}
+.stat-item{text-align:center;}
+.stat-num{font-size:26px;font-weight:800;}
+.stat-num.blue{color:var(--blue);}
+.stat-num.green{color:var(--green);}
+.stat-num.red{color:var(--red);}
+.stat-label{font-size:11px;color:var(--gray);font-weight:600;}
+
+/* STUDENT CARD (home) */
+.student-list{flex:1;overflow-y:auto;}
+.student-card{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;align-items:center;padding:14px 16px;gap:12px;cursor:pointer;transition:background 0.1s;}
+.student-card:active{background:var(--gray-l);}
+.sc-bar{width:4px;height:44px;border-radius:2px;flex-shrink:0;}
+.sc-bar.sent{background:var(--green);}
+.sc-bar.unsent{background:var(--red);}
+.sc-info{flex:1;min-width:0;}
+.sc-name{font-size:16px;font-weight:600;}
+.sc-meta{font-size:12px;color:var(--gray);margin-top:2px;}
+.sc-badges{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;}
+.sc-arrow{color:var(--gray);font-size:18px;}
+
+/* BADGES */
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.badge-高校生{background:var(--purple-l);color:var(--purple);}
+.badge-中学生{background:var(--blue-l);color:var(--blue-dk);}
+.badge-小学生{background:var(--green-l);color:#065F46;}
+.badge-sent{background:var(--green-l);color:var(--green);}
+.badge-unsent{background:var(--red-l);color:var(--red);}
+.badge-optional{background:var(--gray-l);color:var(--gray);border:1px dashed var(--gray-bd);}
+
+/* LEVEL TABS (home) */
+.level-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;overflow-x:auto;padding:0 8px;}
+.level-tab{flex:1;min-width:72px;border:none;background:none;padding:12px 6px 10px;font-size:14px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
+.level-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.level-tab .lt-count{font-size:11px;font-weight:700;background:var(--gray-l);color:var(--gray);border-radius:10px;padding:1px 7px;}
+.level-tab .lt-count.has-unsent{background:var(--red-l);color:var(--red);}
+.grade-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;gap:6px;overflow-x:auto;padding:8px 16px;}
+.grade-tab{flex-shrink:0;border:1px solid var(--gray-bd);background:var(--white);color:var(--navy);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.grade-tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.grade-tab .gt-unsent{font-size:10px;font-weight:700;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;line-height:16px;}
+.badge-type-class{background:var(--gray-l);color:var(--gray);}
+.badge-type-pretest{background:var(--teal-l);color:var(--teal);}
+.badge-type-test{background:var(--orange-l);color:var(--orange);}
+
+/* TYPE SELECT */
+.type-choice{display:flex;flex-direction:column;gap:12px;padding:20px 16px;}
+.type-card{background:var(--white);border:2px solid var(--gray-bd);border-radius:var(--r);padding:18px;text-align:left;cursor:pointer;transition:all 0.12s;}
+.type-card:active{transform:scale(0.98);background:var(--gray-l);}
+.type-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.type-card-title{font-size:16px;font-weight:700;}
+.type-card-sub{font-size:12px;color:var(--gray);margin-top:4px;}
+
+/* CREATE SCREEN */
+.create-hd{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;}
+.back-btn{border:none;background:none;font-size:28px;cursor:pointer;padding:0 4px;line-height:1;color:var(--navy);}
+.create-hd-info{flex:1;}
+.create-hd-name{font-size:16px;font-weight:700;}
+.create-hd-sub{font-size:12px;color:var(--gray);}
+
+.create-body{flex:1;overflow-y:auto;padding-bottom:24px;}
+.create-step{background:var(--white);margin-top:12px;border-top:1px solid var(--gray-bd);border-bottom:1px solid var(--gray-bd);}
+.step-label{font-size:11px;font-weight:700;color:var(--gray);padding:12px 16px 8px;letter-spacing:0.06em;text-transform:uppercase;}
+
+/* EVAL BUTTONS */
+.eval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 14px;}
+.eval-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;border-radius:var(--r-sm);border:2px solid var(--gray-bd);background:var(--white);cursor:pointer;transition:all 0.12s;user-select:none;}
+.eval-btn:active{transform:scale(0.95);}
+.eval-btn .e-emoji{font-size:22px;line-height:1;}
+.eval-btn .e-label{font-size:11px;color:var(--gray);text-align:center;line-height:1.3;white-space:pre-line;}
+.eval-btn.sel{border-color:var(--blue);background:var(--blue-l);}
+.eval-btn.sel .e-label{color:var(--blue-dk);}
+
+/* CHIPS */
+.chip-wrap{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 14px;}
+.chip{padding:8px 14px;border-radius:20px;border:2px solid var(--gray-bd);background:var(--white);font-size:13px;cursor:pointer;transition:all 0.12s;user-select:none;white-space:nowrap;}
+.chip:active{transform:scale(0.95);}
+.chip.sel{border-color:var(--blue);background:var(--blue-l);color:var(--blue-dk);}
+
+/* NOTE */
+.note-wrap{padding:0 16px 14px;}
+.note-input{width:100%;border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:10px 12px;font-family:inherit;font-size:14px;resize:none;outline:none;line-height:1.6;}
+.note-input:focus{border-color:var(--blue);}
+
+/* BUTTONS */
+.btn{display:block;width:100%;padding:14px;border-radius:var(--r);border:none;font-size:15px;font-weight:700;cursor:pointer;transition:opacity 0.15s;text-align:center;font-family:inherit;}
+.btn:active{opacity:0.75;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-blue{background:var(--blue);color:white;}
+.btn-green{background:var(--green);color:white;}
+.btn-outline{background:transparent;border:2px solid var(--gray-bd);color:var(--navy);}
+.btn-red-outline{background:transparent;border:2px solid var(--red);color:var(--red);}
+
+.gen-wrap{padding:12px 16px 0;}
+.btn-row{display:flex;gap:8px;}
+.btn-row .btn{flex:1;}
+
+/* RESULT */
+#result-section{padding:14px 16px;display:none;flex-direction:column;gap:10px;}
+#result-section.visible{display:flex;}
+.result-label{font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.06em;}
+.result-ta{width:100%;border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:12px;font-family:inherit;font-size:14px;line-height:1.8;resize:vertical;outline:none;min-height:160px;}
+.result-ta:focus{border-color:var(--blue);}
+
+/* NEGA CHECK & BLOG */
+.check-box{border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;line-height:1.6;background:var(--white);}
+.check-box.ok{border-color:var(--green);background:var(--green-l);}
+.check-box.warn{border-color:var(--orange);background:var(--orange-l);}
+.check-box.bad{border-color:var(--red);background:var(--red-l);}
+.check-box.loading{color:var(--gray);}
+.check-head{font-weight:700;margin-bottom:4px;}
+.check-issue{padding:8px 0;border-top:1px dashed var(--gray-bd);}
+.check-issue:first-of-type{border-top:none;}
+.check-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-right:6px;color:white;background:var(--orange);}
+.check-tag.must{background:var(--red);}
+.check-quote{font-weight:600;}
+.check-sugg{color:var(--teal);margin-top:2px;}
+.check-actions{display:flex;gap:8px;margin-top:8px;}
+.check-actions .btn{padding:9px;font-size:13px;}
+.section-sep{height:1px;background:var(--gray-bd);margin:10px 0 4px;}
+.blog-toggle{display:flex;align-items:center;gap:8px;padding:0 16px 14px;font-size:14px;}
+.blog-toggle input{width:18px;height:18px;}
+.blog-toggle select{flex:1;}
+
+/* KARTE (生徒カルテ) */
+.karte-btn{border:none;background:var(--purple-l);color:var(--purple);border-radius:20px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit;}
+.karte-body{flex:1;overflow-y:auto;padding-bottom:24px;}
+.karte-sec{background:var(--white);margin-top:12px;border-top:1px solid var(--gray-bd);border-bottom:1px solid var(--gray-bd);padding-bottom:12px;}
+.karte-add{padding:0 16px;display:flex;flex-direction:column;gap:8px;}
+.note-item{display:flex;gap:8px;align-items:flex-start;padding:10px 16px;border-top:1px solid var(--gray-bd);}
+.note-item-main{flex:1;min-width:0;}
+.note-item-meta{font-size:11px;color:var(--gray);margin-bottom:2px;display:flex;gap:6px;align-items:center;}
+.note-item-text{font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.note-cat{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--purple-l);color:var(--purple);}
+.note-cat.c-好きなこと{background:var(--orange-l);color:var(--orange);}
+.note-cat.c-学習{background:var(--blue-l);color:var(--blue-dk);}
+.note-cat.c-家庭・部活{background:var(--teal-l);color:var(--teal);}
+.cand-item{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:13px;line-height:1.5;}
+.cand-item input{margin-top:3px;width:16px;height:16px;flex-shrink:0;}
+.karte-box{border-color:var(--purple);background:var(--purple-l);}
+
+/* HISTORY */
+.history-list{flex:1;overflow-y:auto;}
+.history-item{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:14px 16px;cursor:pointer;transition:background 0.1s;}
+.history-item:active{background:var(--gray-l);}
+.hi-meta{font-size:11px;color:var(--gray);margin-bottom:3px;display:flex;align-items:center;gap:6px;}
+.hi-name{font-size:15px;font-weight:600;margin-bottom:4px;}
+.hi-preview{font-size:13px;color:var(--gray);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;align-items:flex-end;}
+.modal-overlay.open{display:flex;}
+.modal-sheet{background:var(--white);border-radius:20px 20px 0 0;padding:24px;width:100%;max-height:88dvh;overflow-y:auto;}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:16px;}
+
+/* SETTINGS */
+.sub-tabs{display:flex;background:var(--white);border-bottom:1px solid var(--gray-bd);}
+.sub-tab{flex:1;padding:12px 4px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--gray);border-bottom:2px solid transparent;font-weight:600;transition:color 0.15s;}
+.sub-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+.settings-body{flex:1;overflow-y:auto;padding-bottom:24px;}
+.settings-group{margin:12px 16px 0;}
+.settings-group label{display:block;font-size:13px;font-weight:600;color:var(--gray);margin-bottom:6px;}
+.settings-input{width:100%;border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:11px 12px;font-size:14px;font-family:inherit;outline:none;background:var(--white);}
+.settings-input:focus{border-color:var(--blue);}
+.settings-ta{width:100%;border:2px solid var(--gray-bd);border-radius:var(--r-sm);padding:11px 12px;font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.6;min-height:120px;}
+.settings-ta:focus{border-color:var(--blue);}
+.settings-hint{font-size:12px;color:var(--gray);margin-top:5px;line-height:1.5;}
+.api-ok{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;margin-left:8px;}
+.api-ok.set{background:var(--green-l);color:var(--green);}
+.api-ok.none{background:var(--red-l);color:var(--red);}
+
+/* STUDENT LIST (settings) */
+.st-item{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;align-items:center;padding:12px 16px;gap:10px;}
+.st-item-info{flex:1;min-width:0;}
+.st-item-name{font-size:14px;font-weight:600;}
+.st-item-meta{font-size:12px;color:var(--gray);margin-top:2px;}
+.icon-btn{border:none;background:none;cursor:pointer;font-size:20px;padding:4px;flex-shrink:0;}
+
+/* TOAST */
+.toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:#1E293B;color:white;padding:10px 20px;border-radius:20px;font-size:14px;z-index:500;opacity:0;transition:opacity 0.2s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+/* LOADING */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:400;align-items:center;justify-content:center;}
+.loading-overlay.open{display:flex;}
+.loading-box{background:var(--white);border-radius:var(--r);padding:32px 28px;text-align:center;min-width:200px;}
+.spinner{width:40px;height:40px;border:3px solid var(--gray-bd);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 14px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:14px;color:var(--gray);}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:48px 24px;color:var(--gray);}
+.empty .big{font-size:48px;margin-bottom:12px;}
+.empty p{font-size:14px;line-height:1.6;}
+
+/* LOGIN */
+body.logged-out .bottom-nav{display:none;}
+.login-wrap{max-width:360px;margin:0 auto;width:100%;padding:48px 24px;}
+.login-title{font-size:22px;font-weight:800;text-align:center;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--gray);text-align:center;margin-bottom:24px;}
+.login-error{color:var(--red);font-size:13px;margin-top:10px;text-align:center;min-height:16px;}
+
+/* MIC BUTTON */
+.note-row{display:flex;gap:8px;align-items:flex-start;}
+.note-row .note-input{flex:1;}
+.mic-btn{width:44px;height:44px;flex-shrink:0;font-size:20px;border:2px solid var(--gray-bd);border-radius:var(--r-sm);background:var(--white);cursor:pointer;}
+.mic-btn.recording{border-color:var(--red);color:var(--red);animation:mic-pulse 1s infinite;}
+@keyframes mic-pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-title">保護者連絡</div>
+    <div class="login-sub">ログインしてください</div>
+    <div class="settings-group" style="margin:0 0 12px;">
+      <label>メールアドレス</label>
+      <input class="settings-input" type="email" id="login-email" autocomplete="username">
+    </div>
+    <div class="settings-group" style="margin:0 0 16px;">
+      <label>パスワード</label>
+      <input class="settings-input" type="password" id="login-password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-blue" onclick="doLogin()">ログイン</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── HOME SCREEN ── -->
+<div id="screen-home" class="screen">
+  <div class="page-hd">
+    <h1>保護者連絡</h1>
+    <div class="page-hd-sub" id="home-month-label"></div>
+  </div>
+  <div class="level-tabs" id="home-level-tabs"></div>
+  <div class="grade-tabs" id="home-grade-tabs" hidden></div>
+  <div class="stat-bar">
+    <div class="stat-item"><div class="stat-num blue" id="stat-total">0</div><div class="stat-label" id="stat-total-label">全生徒</div></div>
+    <div class="stat-item"><div class="stat-num green" id="stat-sent">0</div><div class="stat-label">送信済</div></div>
+    <div class="stat-item"><div class="stat-num red" id="stat-unsent">0</div><div class="stat-label">未送信</div></div>
+  </div>
+  <div class="search-bar">
+    <input class="settings-input" type="search" id="home-search-input" placeholder="🔍 生徒名・保護者名で検索" oninput="onHomeSearchInput(this)">
+  </div>
+  <div class="student-list" id="home-student-list"></div>
+</div>
+
+<!-- ── REPORT TYPE SELECT SCREEN ── -->
+<div id="screen-type" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="goHome()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name" id="type-sname">—</div>
+      <div class="create-hd-sub" id="type-sparent"></div>
+    </div>
+    <button class="karte-btn" onclick="openKarte(currentStudent && currentStudent.id)">📒 カルテ</button>
+  </div>
+  <div class="type-choice" id="type-cards"></div>
+</div>
+
+<!-- ── KARTE (生徒カルテ) SCREEN ── -->
+<div id="screen-karte" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="closeKarte()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name" id="karte-sname">—</div>
+      <div class="create-hd-sub" id="karte-ssub"></div>
+    </div>
+    <button class="karte-btn" style="background:var(--blue-l);color:var(--blue-dk);" onclick="startCreate(karteStudentId)">✏️ 報告を作る</button>
+  </div>
+  <div class="karte-body">
+    <div class="karte-sec">
+      <div class="step-label">好きなこと・雑談メモ</div>
+      <div class="karte-add">
+        <div class="chip-wrap" id="karte-cat-wrap" style="padding:0;"></div>
+        <textarea class="note-input" id="karte-note-input" rows="2" placeholder="例: 最近はバスケ漫画にハマっている。推しは〇〇。&#10;例: 週末に家族でキャンプに行った話を楽しそうにしていた。"></textarea>
+        <button class="btn btn-blue" style="padding:10px;font-size:14px;" onclick="addKarteNote()">＋ メモを追加</button>
+      </div>
+      <div id="karte-notes" style="margin-top:12px;"></div>
+    </div>
+    <div class="karte-sec">
+      <div class="step-label">これまでの報告</div>
+      <div id="karte-reports"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CREATE SCREEN ── -->
+<div id="screen-create" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="onCreateBack()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name" id="create-sname">—</div>
+      <div class="create-hd-sub" id="create-sparent"></div>
+    </div>
+    <div id="create-slevel"></div>
+    <button class="karte-btn" onclick="openKarte(currentStudent && currentStudent.id)">📒 カルテ</button>
+  </div>
+
+  <div class="create-body">
+    <!-- STEP 1: Evaluation -->
+    <div class="create-step">
+      <div class="step-label">Step 1 · 全体評価</div>
+      <div class="eval-grid" id="eval-grid"></div>
+    </div>
+
+    <!-- STEP 2: Points chips -->
+    <div class="create-step">
+      <div class="step-label">Step 2 · 具体的なポイント（複数可）</div>
+      <div class="chip-wrap" id="chip-wrap"></div>
+    </div>
+
+    <!-- STEP 3: Free note -->
+    <div class="create-step">
+      <div class="step-label" id="step3-label">Step 3 · 一言メモ（教科・様子など）</div>
+      <div class="note-wrap">
+        <div class="note-row">
+          <textarea class="note-input" id="note-input" rows="3" placeholder="例: 今日は数学、集中して取り組んでいた。発言も多かった。&#10;例: 英語の小テストで満点だった。"></textarea>
+          <button type="button" class="mic-btn" id="mic-btn" onclick="toggleMic()" title="音声入力">🎤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4: Length -->
+    <div class="create-step">
+      <div class="step-label">Step 4 · 文章の長さ</div>
+      <div class="chip-wrap" id="length-chip-wrap"></div>
+    </div>
+
+    <!-- STEP 5: Blog -->
+    <div class="create-step">
+      <div class="step-label">Step 5 · ブログ記事</div>
+      <label class="blog-toggle">
+        <input type="checkbox" id="blog-enable" onchange="onBlogToggle(this)">
+        <span>報告文からブログ記事も作る</span>
+      </label>
+      <div class="blog-toggle" id="blog-teacher-row">
+        <span style="font-size:13px;color:var(--gray);">担当</span>
+        <select class="settings-input" id="blog-teacher" onchange="onBlogTeacherChange(this)"></select>
+      </div>
+    </div>
+
+    <!-- GENERATE -->
+    <div class="gen-wrap">
+      <button class="btn btn-blue" id="gen-btn" onclick="onGenerate()">✨ AI生成</button>
+    </div>
+
+    <!-- RESULT -->
+    <div id="result-section">
+      <div class="result-label">生成された報告文</div>
+      <textarea class="result-ta" id="result-ta" rows="7"></textarea>
+      <div class="check-box" id="report-check" hidden></div>
+      <div class="check-box karte-box" id="karte-cand" hidden></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="onCopy()">📋 コピー</button>
+        <button class="btn btn-green" onclick="onMarkSent()">✓ 送信済みにする</button>
+      </div>
+      <button class="btn btn-outline" onclick="onGenerate()" style="margin-top:0;">🔄 再生成</button>
+
+      <div id="blog-section" hidden>
+        <div class="section-sep"></div>
+        <div class="result-label">ブログ記事（公開用・個人名なし）</div>
+        <textarea class="result-ta" id="blog-ta" rows="10"></textarea>
+        <div class="check-box" id="blog-check" hidden></div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="onCopyBlog()">📋 コピー</button>
+          <button class="btn btn-outline" onclick="onRegenerateBlog()">🔄 書き直す</button>
+        </div>
+        <a class="btn btn-blue" href="https://meiseikobetsu.jp/blog-post.php" target="_blank" rel="noopener" style="text-decoration:none;">📝 ブログ投稿画面を開く</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HISTORY SCREEN ── -->
+<div id="screen-history" class="screen">
+  <div class="page-hd"><h1>送信履歴</h1></div>
+  <div class="search-bar">
+    <input class="settings-input" type="search" id="history-search-input" placeholder="🔍 生徒名で検索" oninput="onHistorySearchInput(this)">
+  </div>
+  <div class="history-list" id="history-list"></div>
+</div>
+
+<!-- ── SETTINGS SCREEN ── -->
+<div id="screen-settings" class="screen">
+  <div class="page-hd"><h1>設定</h1></div>
+  <div class="sub-tabs">
+    <button class="sub-tab active" id="stab-api" onclick="showSettingsTab('api')">APIキー</button>
+    <button class="sub-tab" id="stab-style" onclick="showSettingsTab('style')">文体サンプル</button>
+    <button class="sub-tab" id="stab-students" onclick="showSettingsTab('students')">生徒管理</button>
+  </div>
+  <div class="settings-body" id="settings-body"></div>
+</div>
+
+<!-- ── BOTTOM NAV ── -->
+<nav class="bottom-nav">
+  <button class="nav-tab active" id="tab-home" onclick="showTab('home')"><span class="ni">🏠</span>ホーム</button>
+  <button class="nav-tab" id="tab-history" onclick="showTab('history')"><span class="ni">📋</span>履歴</button>
+  <button class="nav-tab" id="tab-settings" onclick="showTab('settings')"><span class="ni">⚙️</span>設定</button>
+</nav>
+
+<!-- ── REPORT DETAIL MODAL ── -->
+<div class="modal-overlay" id="modal-report">
+  <div class="modal-sheet">
+    <div class="modal-title" id="mreport-title"></div>
+    <div style="font-size:12px;color:var(--gray);margin-bottom:12px;" id="mreport-meta"></div>
+    <div style="font-size:14px;line-height:1.8;white-space:pre-wrap;margin-bottom:20px;" id="mreport-body"></div>
+    <div id="mreport-blog-wrap" hidden>
+      <div class="result-label" style="margin-bottom:6px;">ブログ記事</div>
+      <div style="font-size:14px;line-height:1.8;white-space:pre-wrap;margin-bottom:12px;" id="mreport-blog"></div>
+      <button class="btn btn-outline" style="margin-bottom:20px;" onclick="copyBlogModal()">📋 ブログ記事をコピー</button>
+    </div>
+    <div class="btn-row" style="margin-bottom:10px;">
+      <button class="btn btn-outline" onclick="copyReportModal()">📋 コピー</button>
+      <button class="btn btn-red-outline" onclick="deleteReportModal()">削除</button>
+    </div>
+    <button class="btn btn-outline" onclick="closeModal('modal-report')">閉じる</button>
+  </div>
+</div>
+
+<!-- ── STUDENT EDIT MODAL ── -->
+<div class="modal-overlay" id="modal-student">
+  <div class="modal-sheet">
+    <div class="modal-title" id="mstudent-title">生徒追加</div>
+    <input type="hidden" id="mst-id">
+    <div class="settings-group">
+      <label>生徒名 <span style="color:var(--red)">*</span></label>
+      <input class="settings-input" type="text" id="mst-name" placeholder="例: 山田 太郎">
+    </div>
+    <div class="settings-group">
+      <label>保護者名</label>
+      <input class="settings-input" type="text" id="mst-parent" placeholder="例: 山田 花子">
+    </div>
+    <div class="settings-group">
+      <label>学年区分 <span style="color:var(--red)">*</span></label>
+      <select class="settings-input" id="mst-level" onchange="updateGradeOptions()">
+        <option value="高校生">高校生</option>
+        <option value="中学生">中学生</option>
+        <option value="小学生">小学生</option>
+      </select>
+    </div>
+    <div class="settings-group">
+      <label>学年</label>
+      <select class="settings-input" id="mst-grade"></select>
+    </div>
+    <div class="settings-group">
+      <label>メモ（任意）</label>
+      <input class="settings-input" type="text" id="mst-note" placeholder="自由メモ">
+    </div>
+    <div class="btn-row" style="margin:16px 16px 0;">
+      <button class="btn btn-outline" onclick="closeModal('modal-student')">キャンセル</button>
+      <button class="btn btn-blue" onclick="saveStudent()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── STYLE SAMPLE MODAL ── -->
+<div class="modal-overlay" id="modal-style">
+  <div class="modal-sheet">
+    <div class="modal-title" id="mstyle-title">文例追加</div>
+    <input type="hidden" id="msty-level">
+    <input type="hidden" id="msty-type">
+    <input type="hidden" id="msty-id">
+    <div class="settings-group">
+      <label>文例本文 <span style="color:var(--red)">*</span></label>
+      <textarea class="settings-ta" id="msty-text" rows="6" placeholder="過去に書いた報告文を貼り付けてください"></textarea>
+    </div>
+    <div class="btn-row" style="margin:16px 16px 0;">
+      <button class="btn btn-outline" onclick="closeModal('modal-style')">キャンセル</button>
+      <button class="btn btn-blue" onclick="saveStyleSample()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOADING ── -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-text">AIが文章を生成中...</div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {
+  initializeFirestore, persistentLocalCache,
+  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBiKH5SPENyNSb9vJRikTMmbDK7e0rZWp0",
+  authDomain: "hogosha-report.firebaseapp.com",
+  projectId: "hogosha-report",
+  storageBucket: "hogosha-report.firebasestorage.app",
+  messagingSenderId: "6240868565",
+  appId: "1:6240868565:web:3c2d098336a5fd9d78ea5c"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { localCache: persistentLocalCache() });
+
+window.fb = {
+  auth, db,
+  signInWithEmailAndPassword, onAuthStateChanged, signOut,
+  collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch
+};
+window.dispatchEvent(new Event('fb-ready'));
+</script>
+
+<script>
+// ─── CONSTANTS ────────────────────────────────────────────
+const LEVELS = ['高校生', '中学生', '小学生'];
+const GRADE_COUNT = {'高校生': 3, '中学生': 3, '小学生': 6};
+const LEVEL_SHORT = {'高校生': '高', '中学生': '中', '小学生': '小'};
+
+// 学年未設定の生徒は学年区分名をそのまま表示
+function gradeLabel(s) {
+  return s.grade ? `${LEVEL_SHORT[s.level] || ''}${s.grade}` : s.level;
+}
+
+function compareStudents(a, b) {
+  return (LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level))
+      || ((b.grade || 0) - (a.grade || 0))
+      || (a.name || '').localeCompare(b.name || '', 'ja');
+}
+
+const TEST_CHIPS = [
+  '目標点を達成した','目標点に届かなかった','前回より点数が伸びた','点数が下がった',
+  'ケアレスミスが多かった','苦手分野の克服が見られる','得意分野を伸ばせている',
+  'テスト勉強に計画的に取り組めていた','準備不足が見られた','本人の手応えは良好',
+  '本人はやや落ち込んでいる','次回に向けた課題が明確になった'
+];
+
+const PRETEST_CHIPS = [
+  'テスト範囲の学習が順調','計画的に準備できている','準備がやや遅れ気味',
+  '苦手分野の対策に取り組んでいる','演習量が十分','演習量が不足している',
+  '学校ワーク・提出物が完了','学校ワーク・提出物が未完了','目標点を設定した',
+  '本人のやる気が高い','不安を感じている様子','質問が増えている',
+  '自習・追加授業の利用をおすすめしたい'
+];
+
+const LEVEL_CHIPS = {
+  '高校生': {
+    class: [
+      '授業への取り組みが良い','自主学習ができている','進路への意識が高い',
+      '課題の提出が安定','友人関係が良好','質問・相談ができている',
+      '自己管理ができている','積極的に発言している','気分が安定している',
+      '体調が安定している','欠席が続いている','遅刻が目立つ',
+      '提出物に遅れがある','気分が不安定'
+    ],
+    pretest: PRETEST_CHIPS,
+    test: TEST_CHIPS
+  },
+  '中学生': {
+    class: [
+      '授業に集中できている','積極的に発言している','提出物が安定',
+      '友人関係が良好','自主的に取り組んでいる','挨拶がしっかりできている',
+      '部活動に熱心','気分が安定している','体調が安定している',
+      '欠席が続いている','遅刻が目立つ','提出物に遅れがある','気分が不安定'
+    ],
+    pretest: PRETEST_CHIPS,
+    test: TEST_CHIPS
+  },
+  '小学生': {
+    class: [
+      '積極的に発言している','友達と仲良くできている','提出物が揃っている',
+      '集中して取り組んでいる','休み時間も元気','発言が増えてきた',
+      '落ち着いて過ごせている','体調が安定している',
+      '欠席が続いている','元気がない様子','忘れ物が多い'
+    ]
+  }
+};
+
+const REPORT_TYPE_LABEL = {class: '通常授業', pretest: 'テスト前', test: 'テスト振り返り'};
+
+// 作成できる報告種別（テスト前はテストのたびに送る任意の報告）
+function typesForLevel(level) {
+  return (level === '中学生' || level === '高校生') ? ['class', 'pretest', 'test'] : ['class'];
+}
+
+// 毎月の「送信済」判定に必要な報告種別
+function requiredTypesForLevel(level) {
+  return typesForLevel(level).filter(t => t !== 'pretest');
+}
+
+function getChipsFor(level, type) {
+  const entry = LEVEL_CHIPS[level];
+  if (!entry) return [];
+  return entry[type] || entry.class || [];
+}
+
+const EVALS = [
+  {emoji:'👍', label:'全体\n良好'},
+  {emoji:'📈', label:'成長\nあり'},
+  {emoji:'⚠️', label:'要\n注意'},
+  {emoji:'🏠', label:'欠席\n体調'},
+  {emoji:'💬', label:'その他'},
+];
+
+const LENGTH_OPTIONS = [
+  {key:'short',  label:'短め', desc:'3〜4文程度の簡潔な文章', tokens:400},
+  {key:'normal', label:'普通', desc:'5〜7文程度の標準的な文章', tokens:700},
+  {key:'long',   label:'長め', desc:'8文以上の詳しい文章',     tokens:1100},
+];
+
+// ─── STORAGE ─────────────────────────────────────────────
+const K = {
+  students: 'pr_students',
+  reports:  'pr_reports',
+  apiKey:   'pr_api_key',
+  styles:   'pr_styles',
+};
+
+function load(key, def) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? def; }
+  catch { return def; }
+}
+
+// Legacy localStorage shape → normalized {class:[], test:[]} per level (used for one-time migration only)
+function normalizeLegacyStyles(raw) {
+  const out = {};
+  LEVELS.forEach(lv => {
+    const v = raw[lv];
+    const entry = {class: [], test: []};
+    if (Array.isArray(v)) {
+      entry.class = v;
+    } else if (v && typeof v === 'object') {
+      entry.class = Array.isArray(v.class) ? v.class : [];
+      entry.test  = Array.isArray(v.test)  ? v.test  : [];
+    } else if (typeof v === 'string' && v.trim()) {
+      entry.class = [{id: uid(), text: v.trim()}];
+    }
+    out[lv] = entry;
+  });
+  return out;
+}
+
+function getStudents()  { return studentsCache; }
+function getReports()   { return reportsCache; }
+function getApiKey()    { return settingsCache.apiKey || ''; }
+function getOpenAIKey() { return settingsCache.openaiApiKey || ''; }
+function getStyles()    { return stylesCache; }
+
+// ─── FIREBASE SYNC ──────────────────────────────────────────
+function normalizeStyleDocs(docs) {
+  const out = {};
+  LEVELS.forEach(lv => out[lv] = {class: [], pretest: [], test: []});
+  docs.forEach(sp => {
+    if (!out[sp.level]) return;
+    const type = (sp.type === 'test' || sp.type === 'pretest') ? sp.type : 'class';
+    out[sp.level][type].push({id: sp.id, text: sp.text});
+  });
+  return out;
+}
+
+function rerenderCurrentScreen() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  if (active.id === 'screen-home')     renderHome();
+  if (active.id === 'screen-history')  renderHistory();
+  if (active.id === 'screen-settings') renderSettings();
+  if (active.id === 'screen-karte')    renderKarte();
+}
+
+function subscribeAll(uid) {
+  const { db, collection, doc, onSnapshot } = window.fb;
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'students'), snap => {
+    studentsCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'reports'), snap => {
+    reportsCache = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a,b) => (b.sentAt||'').localeCompare(a.sentAt||''));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'styles'), snap => {
+    stylesCache = normalizeStyleDocs(snap.docs.map(d => ({id: d.id, ...d.data()})));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'notes'), snap => {
+    notesCache = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+    rerenderCurrentScreen();
+  }));
+  fsUnsubs.push(onSnapshot(doc(db, 'users', uid, 'settings', 'main'), d => {
+    settingsCache = d.exists() ? d.data() : {};
+    rerenderCurrentScreen();
+  }));
+}
+
+function unsubscribeAll() {
+  fsUnsubs.forEach(u => u());
+  fsUnsubs = [];
+  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {}; notesCache = [];
+}
+
+async function migrateLocalDataIfNeeded(uid) {
+  if (localStorage.getItem('pr_migrated')) return;
+  const localStudents  = load(K.students, []);
+  const localReports   = load(K.reports, []);
+  const localStyles    = normalizeLegacyStyles(load(K.styles, {}));
+  const localApiKey    = localStorage.getItem(K.apiKey) || '';
+  const hasStyles = LEVELS.some(lv => localStyles[lv].class.length || localStyles[lv].test.length);
+
+  if (!localStudents.length && !localReports.length && !hasStyles && !localApiKey) {
+    localStorage.setItem('pr_migrated', '1');
+    return;
+  }
+
+  const { db, doc, writeBatch } = window.fb;
+  const batch = writeBatch(db);
+  localStudents.forEach(s => {
+    const { id, ...rest } = s;
+    batch.set(doc(db, 'users', uid, 'students', id), rest);
+  });
+  localReports.forEach(r => {
+    const { id, ...rest } = r;
+    batch.set(doc(db, 'users', uid, 'reports', id), rest);
+  });
+  LEVELS.forEach(lv => ['class','test'].forEach(type =>
+    (localStyles[lv][type] || []).forEach(sp =>
+      batch.set(doc(db, 'users', uid, 'styles', sp.id), {level: lv, type, text: sp.text})
+    )
+  ));
+  if (localApiKey) batch.set(doc(db, 'users', uid, 'settings', 'main'), {apiKey: localApiKey});
+
+  await batch.commit();
+  localStorage.setItem('pr_migrated', '1');
+  showToast('データをクラウドに移行しました');
+}
+
+function exportBackup() {
+  const data = {
+    exportedAt: new Date().toISOString(),
+    students: getStudents(),
+    reports:  getReports(),
+    styles:   getStyles(),
+    notes:    notesCache,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hogosha-report-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('バックアップをダウンロードしました');
+}
+
+async function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!confirm('バックアップを読み込みます。同じIDのデータは上書きされます。よろしいですか？')) {
+    input.value = '';
+    return;
+  }
+  try {
+    const data = JSON.parse(await file.text());
+    const { db, doc, writeBatch } = window.fb;
+    const batch = writeBatch(db);
+    (data.students || []).forEach(s => {
+      const { id, ...rest } = s;
+      batch.set(doc(db, 'users', fbUser.uid, 'students', id || uid()), rest);
+    });
+    (data.reports || []).forEach(r => {
+      const { id, ...rest } = r;
+      batch.set(doc(db, 'users', fbUser.uid, 'reports', id || uid()), rest);
+    });
+    (data.notes || []).forEach(n => {
+      const { id, ...rest } = n;
+      batch.set(doc(db, 'users', fbUser.uid, 'notes', id || uid()), rest);
+    });
+    const styles = data.styles || {};
+    LEVELS.forEach(lv => ['class','pretest','test'].forEach(type =>
+      ((styles[lv] || {})[type] || []).forEach(sp =>
+        batch.set(doc(db, 'users', fbUser.uid, 'styles', sp.id || uid()), {level: lv, type, text: sp.text})
+      )
+    ));
+    await batch.commit();
+    showToast('インポートが完了しました');
+  } catch (e) {
+    showToast('インポートに失敗しました: ' + (e.message || ''));
+  } finally {
+    input.value = '';
+  }
+}
+
+function showLoginScreen() {
+  document.body.classList.add('logged-out');
+  ['home','history','settings','create','type','karte'].forEach(t =>
+    document.getElementById('screen-'+t).classList.remove('active')
+  );
+  document.getElementById('screen-login').classList.add('active');
+}
+
+function hideLoginScreen() {
+  document.body.classList.remove('logged-out');
+  document.getElementById('screen-login').classList.remove('active');
+}
+
+function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!email || !pass) { errEl.textContent = 'メールアドレスとパスワードを入力してください'; return; }
+  window.fb.signInWithEmailAndPassword(window.fb.auth, email, pass).catch(e => {
+    errEl.textContent = 'ログインに失敗しました（' + (e.code || e.message) + '）';
+  });
+}
+
+function doLogout() {
+  if (!confirm('ログアウトしますか？')) return;
+  unsubscribeAll();
+  window.fb.signOut(window.fb.auth);
+}
+
+window.addEventListener('fb-ready', () => {
+  window.fb.onAuthStateChanged(window.fb.auth, async (user) => {
+    if (user) {
+      fbUser = user;
+      hideLoginScreen();
+      subscribeAll(user.uid);
+      await migrateLocalDataIfNeeded(user.uid);
+      showTab('home');
+    } else {
+      fbUser = null;
+      unsubscribeAll();
+      showLoginScreen();
+    }
+  });
+});
+
+// ─── STATE ───────────────────────────────────────────────
+let currentStudent    = null;
+let currentReportType = 'class';
+let selectedEval      = null;
+let selectedChips     = [];
+let selectedLength    = 'normal';
+let settingsTabNow    = 'api';
+let modalReportId     = null;
+
+// Firebase-backed data caches (populated by onSnapshot)
+let fbUser        = null;
+let studentsCache = [];
+let reportsCache  = [];
+let notesCache    = [];
+let stylesCache   = {};
+let settingsCache = {};
+let fsUnsubs      = [];
+
+// Voice input
+let micActive = false;
+
+// Search
+let homeSearchQuery    = '';
+let historySearchQuery = '';
+
+// ─── UTILS ───────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function currentYM() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function isTypeSentThisMonth(studentId, type) {
+  const m = currentYM();
+  return getReports().some(r =>
+    r.studentId === studentId && (r.reportType || 'class') === type && r.sentAt && r.sentAt.startsWith(m)
+  );
+}
+
+function lastSentAt(studentId, type) {
+  return getReports()
+    .filter(r => r.studentId === studentId && (r.reportType || 'class') === type && r.sentAt)
+    .reduce((max, r) => r.sentAt > max ? r.sentAt : max, '') || null;
+}
+
+function fmtMD(iso) {
+  const d = new Date(iso);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// 種別ごとの送信状況バッジ。テスト前は任意なので未送信でも赤にせずグレー＋前回日付
+function typeStatusBadge(studentId, type, withLabel) {
+  const prefix = withLabel ? `${REPORT_TYPE_LABEL[type]}: ` : '';
+  const sent = isTypeSentThisMonth(studentId, type);
+  if (type !== 'pretest') {
+    return `<span class="badge badge-${sent?'sent':'unsent'}">${prefix}${sent?'✓送信済':'未送信'}</span>`;
+  }
+  const last = lastSentAt(studentId, type);
+  if (sent) return `<span class="badge badge-sent">${prefix}✓${fmtMD(last)}送信</span>`;
+  return `<span class="badge badge-optional">${prefix}${last ? `前回 ${fmtMD(last)}` : '未送信'}</span>`;
+}
+
+function isFullySentThisMonth(student) {
+  return requiredTypesForLevel(student.level).every(t => isTypeSentThisMonth(student.id, t));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function setLoading(on) {
+  document.getElementById('loading').classList.toggle('open', on);
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────
+function hideAllScreens() {
+  stopMic();
+  ['home','history','settings','create','type','karte'].forEach(t =>
+    document.getElementById('screen-'+t).classList.remove('active')
+  );
+  ['home','history','settings'].forEach(t =>
+    document.getElementById('tab-'+t).classList.remove('active')
+  );
+}
+
+function showTab(tab) {
+  hideAllScreens();
+  document.getElementById('screen-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if (tab === 'home')     renderHome();
+  if (tab === 'history')  renderHistory();
+  if (tab === 'settings') renderSettings();
+}
+
+function goHome() { showTab('home'); }
+
+function onHomeSearchInput(input) {
+  homeSearchQuery = input.value;
+  renderHome();
+}
+
+function onHistorySearchInput(input) {
+  historySearchQuery = input.value;
+  renderHistory();
+}
+
+// ─── HOME ────────────────────────────────────────────────
+let homeLevelTab = (() => { try { return localStorage.getItem('pr_home_level_tab') || 'all'; } catch { return 'all'; } })();
+
+let homeGradeTab = 'all'; // 'all' | '1'〜'6' | 'none'
+
+function selectHomeLevelTab(tab) {
+  homeLevelTab = tab;
+  homeGradeTab = 'all';
+  try { localStorage.setItem('pr_home_level_tab', tab); } catch {}
+  renderHome();
+}
+
+function selectHomeGradeTab(tab) {
+  homeGradeTab = tab;
+  renderHome();
+}
+
+function matchesGradeTab(s, tab) {
+  if (tab === 'all')  return true;
+  if (tab === 'none') return !s.grade;
+  return String(s.grade) === tab;
+}
+
+// 学年区分タブを選んでいるときだけ、その下に学年タブを表示
+function renderHomeGradeTabs(levelStudents) {
+  const el = document.getElementById('home-grade-tabs');
+  if (homeLevelTab === 'all') { el.hidden = true; return; }
+  const n = GRADE_COUNT[homeLevelTab] || 0;
+  const tabs = [{key:'all', label:'全学年'},
+    ...Array.from({length: n}, (_, i) => ({key: String(i+1), label: `${LEVEL_SHORT[homeLevelTab]}${i+1}`}))];
+  if (levelStudents.some(s => !s.grade)) tabs.push({key:'none', label:'未設定'});
+  if (!tabs.some(t => t.key === homeGradeTab)) homeGradeTab = 'all';
+  el.innerHTML = tabs.map(t => {
+    const unsent = levelStudents.filter(s => matchesGradeTab(s, t.key) && !isFullySentThisMonth(s)).length;
+    return `<button class="grade-tab${t.key === homeGradeTab ? ' active' : ''}" onclick="selectHomeGradeTab('${t.key}')">${t.label}${unsent ? `<span class="gt-unsent">${unsent}</span>` : ''}</button>`;
+  }).join('');
+  el.hidden = false;
+}
+
+function renderHomeLevelTabs(allStudents) {
+  const tabs = [{key:'all', label:'すべて'}, ...LEVELS.map(lv => ({key: lv, label: lv}))];
+  document.getElementById('home-level-tabs').innerHTML = tabs.map(t => {
+    const list = t.key === 'all' ? allStudents : allStudents.filter(s => s.level === t.key);
+    const unsent = list.filter(s => !isFullySentThisMonth(s)).length;
+    const count = unsent
+      ? `<span class="lt-count has-unsent" title="未送信 ${unsent}人">${unsent}</span>`
+      : `<span class="lt-count">${list.length ? '✓' : 0}</span>`;
+    return `<button class="level-tab${t.key === homeLevelTab ? ' active' : ''}" onclick="selectHomeLevelTab('${t.key}')">${t.label}${count}</button>`;
+  }).join('');
+}
+
+function renderHome() {
+  const allStudents = getStudents();
+  const d = new Date();
+  document.getElementById('home-month-label').textContent = `${d.getMonth()+1}月の連絡状況`;
+
+  if (homeLevelTab !== 'all' && !LEVELS.includes(homeLevelTab)) homeLevelTab = 'all';
+  renderHomeLevelTabs(allStudents);
+  const levelStudents = homeLevelTab === 'all' ? allStudents : allStudents.filter(s => s.level === homeLevelTab);
+  renderHomeGradeTabs(levelStudents);
+  const students = levelStudents.filter(s => matchesGradeTab(s, homeGradeTab));
+
+  const sentCount = students.filter(s => isFullySentThisMonth(s)).length;
+  document.getElementById('stat-total').textContent  = students.length;
+  document.getElementById('stat-total-label').textContent =
+    homeLevelTab === 'all' ? '全生徒'
+    : homeGradeTab === 'all' ? homeLevelTab
+    : homeGradeTab === 'none' ? '学年未設定'
+    : `${LEVEL_SHORT[homeLevelTab]}${homeGradeTab}`;
+  document.getElementById('stat-sent').textContent   = sentCount;
+  document.getElementById('stat-unsent').textContent = students.length - sentCount;
+
+  const el = document.getElementById('home-student-list');
+  if (!allStudents.length) {
+    el.innerHTML = `<div class="empty"><div class="big">👥</div><p>まだ生徒が登録されていません。<br>設定 → 生徒管理から追加してください。</p></div>`;
+    return;
+  }
+  if (!students.length) {
+    el.innerHTML = `<div class="empty"><div class="big">👥</div><p>${esc(document.getElementById('stat-total-label').textContent)}の生徒はまだ登録されていません。</p></div>`;
+    return;
+  }
+
+  const q = homeSearchQuery.trim().toLowerCase();
+  const filtered = q
+    ? students.filter(s => (s.name||'').toLowerCase().includes(q) || (s.parentName||'').toLowerCase().includes(q))
+    : students;
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="big">🔍</div><p>「${esc(homeSearchQuery)}」に一致する生徒がいません。</p></div>`;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a,b) => {
+    const as = isFullySentThisMonth(a), bs = isFullySentThisMonth(b);
+    if (as !== bs) return as ? 1 : -1;
+    return compareStudents(a, b);
+  });
+
+  el.innerHTML = sorted.map(s => {
+    const types = typesForLevel(s.level);
+    const fullySent = isFullySentThisMonth(s);
+    const statusHtml = types.length > 1
+      ? types.map(t => typeStatusBadge(s.id, t, true)).join('')
+      : `<span class="badge badge-${fullySent?'sent':'unsent'}">${fullySent?'✓ 送信済':'未送信'}</span>`;
+    return `<div class="student-card" onclick="startCreate('${s.id}')">
+      <div class="sc-bar ${fullySent?'sent':'unsent'}"></div>
+      <div class="sc-info">
+        <div class="sc-name">${esc(s.name)}</div>
+        <div class="sc-meta">${esc(s.parentName||'—')}</div>
+        <div class="sc-badges">
+          <span class="badge badge-${s.level}">${gradeLabel(s)}</span>
+          ${statusHtml}
+        </div>
+      </div>
+      <button class="karte-btn" onclick="event.stopPropagation();openKarte('${s.id}')">📒 カルテ</button>
+      <div class="sc-arrow">›</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── CREATE ───────────────────────────────────────────────
+function startCreate(studentId) {
+  const s = getStudents().find(x => x.id === studentId);
+  if (!s) return;
+  if (typesForLevel(s.level).length > 1) {
+    openTypeScreen(s);
+  } else {
+    startCreateForm(studentId, 'class');
+  }
+}
+
+function openTypeScreen(s) {
+  currentStudent = s;
+  document.getElementById('type-sname').textContent  = s.name;
+  document.getElementById('type-sparent').textContent = s.parentName ? `保護者: ${s.parentName}` : '';
+
+  const sub = {
+    class:   '普段の授業の様子を報告',
+    pretest: 'テストに向けた準備状況・目標を報告',
+    test:    'テスト結果・振り返りを報告'
+  };
+  document.getElementById('type-cards').innerHTML = typesForLevel(s.level).map(t => {
+    return `<div class="type-card" onclick="chooseReportType('${t}')">
+      <div class="type-card-top">
+        <div class="type-card-title">${REPORT_TYPE_LABEL[t]}の報告</div>
+        ${typeStatusBadge(s.id, t, false)}
+      </div>
+      <div class="type-card-sub">${sub[t]}</div>
+    </div>`;
+  }).join('');
+
+  hideAllScreens();
+  document.getElementById('screen-type').classList.add('active');
+}
+
+function chooseReportType(type) {
+  startCreateForm(currentStudent.id, type);
+}
+
+function onCreateBack() {
+  if (currentStudent && typesForLevel(currentStudent.level).length > 1) {
+    openTypeScreen(currentStudent);
+  } else {
+    goHome();
+  }
+}
+
+function startCreateForm(studentId, reportType) {
+  const s = getStudents().find(x => x.id === studentId);
+  if (!s) return;
+  currentStudent    = s;
+  currentReportType = reportType;
+  selectedEval   = null;
+  selectedChips  = [];
+  selectedLength = 'normal';
+
+  document.getElementById('create-sname').textContent  = s.name;
+  document.getElementById('create-sparent').textContent = s.parentName ? `保護者: ${s.parentName}` : '';
+  const typeBadge = typesForLevel(s.level).length > 1
+    ? `<span class="badge badge-type-${reportType}">${REPORT_TYPE_LABEL[reportType]}</span>`
+    : '';
+  document.getElementById('create-slevel').innerHTML =
+    `<span class="badge badge-${s.level}">${gradeLabel(s)}</span> ${typeBadge}`;
+  document.getElementById('note-input').value = '';
+  const micBtn = document.getElementById('mic-btn');
+  if (micBtn) micBtn.style.display = supportsRecording() ? '' : 'none';
+
+  const step3Label = document.getElementById('step3-label');
+  const noteInput  = document.getElementById('note-input');
+  if (reportType === 'test') {
+    step3Label.textContent = 'Step 3 · 詳細メモ（音声の文字起こしなど、そのまま貼り付け可）';
+    noteInput.rows = 8;
+    noteInput.placeholder = '例: (音声を文字起こしした内容をそのまま貼り付け)\n今日は数学のテスト振り返りをしました。点数は78点で目標の80点にわずかに届きませんでした。計算ミスが2問あり…';
+  } else if (reportType === 'pretest') {
+    step3Label.textContent = 'Step 3 · 詳細メモ（テスト日程・範囲・目標点・準備状況など）';
+    noteInput.rows = 8;
+    noteInput.placeholder = '例: 10/15から中間テスト。数学は方程式〜関数が範囲。目標は80点。\nワークは8割終わっている。関数の文章題が苦手なので残りの授業で重点的に演習予定。家では毎日30分ワークの見直しを…';
+  } else {
+    step3Label.textContent = 'Step 3 · 一言メモ（教科・様子など）';
+    noteInput.rows = 3;
+    noteInput.placeholder = '例: 今日は数学、集中して取り組んでいた。発言も多かった。\n例: 英語の小テストで満点だった。';
+  }
+
+  // Render evaluation buttons
+  document.getElementById('eval-grid').innerHTML = EVALS.map((e,i) =>
+    `<button class="eval-btn" id="eval-${i}" onclick="selectEval(${i})">
+      <span class="e-emoji">${e.emoji}</span>
+      <span class="e-label">${e.label}</span>
+    </button>`
+  ).join('');
+
+  // Render chips for this school level & report type
+  const chips = getChipsFor(s.level, reportType);
+  document.getElementById('chip-wrap').innerHTML = chips.map(c =>
+    `<div class="chip" data-chip="${esc(c)}" onclick="toggleChip(this)">${esc(c)}</div>`
+  ).join('');
+
+  // Render length options
+  document.getElementById('length-chip-wrap').innerHTML = LENGTH_OPTIONS.map(o =>
+    `<div class="chip${o.key === selectedLength ? ' sel' : ''}" data-length="${o.key}" onclick="selectLength(this)">${o.label}</div>`
+  ).join('');
+
+  // Blog options
+  const blogEnabled = settingsCache.blogEnabled !== false;
+  document.getElementById('blog-enable').checked = blogEnabled;
+  const teacherSel = document.getElementById('blog-teacher');
+  const curTeacher = settingsCache.blogTeacher || DEFAULT_BLOG_TEACHER;
+  teacherSel.innerHTML = BLOG_TEACHERS.map(t =>
+    `<option value="${esc(t)}"${t === curTeacher ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  document.getElementById('blog-teacher-row').style.display = blogEnabled ? '' : 'none';
+
+  // Hide result
+  genSeq++;
+  document.getElementById('result-section').classList.remove('visible');
+  document.getElementById('result-ta').value = '';
+  document.getElementById('blog-ta').value = '';
+  document.getElementById('blog-section').hidden = true;
+  karteCands = [];
+  ['report-check','blog-check','karte-cand'].forEach(id => {
+    const el = document.getElementById(id); el.hidden = true; el.innerHTML = '';
+  });
+
+  // Show create screen, hide others
+  hideAllScreens();
+  document.getElementById('screen-create').classList.add('active');
+  document.querySelector('.create-body').scrollTop = 0;
+}
+
+function selectEval(idx) {
+  selectedEval = `${EVALS[idx].emoji} ${EVALS[idx].label.replace('\n','')}`;
+  document.querySelectorAll('.eval-btn').forEach((b,i) => b.classList.toggle('sel', i===idx));
+}
+
+function toggleChip(el) {
+  const label = el.dataset.chip;
+  const idx = selectedChips.indexOf(label);
+  if (idx === -1) { selectedChips.push(label); el.classList.add('sel'); }
+  else            { selectedChips.splice(idx,1); el.classList.remove('sel'); }
+}
+
+function selectLength(el) {
+  selectedLength = el.dataset.length;
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c === el));
+}
+
+// ─── VOICE INPUT (録音 → Whisper APIで文字起こし) ───────────
+let mediaRecorder = null;
+let audioChunks   = [];
+
+function supportsRecording() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+
+function toggleMic() {
+  if (!supportsRecording()) { showToast('このブラウザは音声入力に対応していません'); return; }
+  if (micActive) stopMic(); else startMic();
+}
+
+async function startMic() {
+  if (!getOpenAIKey()) { showToast('設定でOpenAI APIキーを登録してください'); showTab('settings'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const mimeType = ['audio/mp4', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    mediaRecorder = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      transcribeAudio(new Blob(audioChunks, {type: mediaRecorder.mimeType || 'audio/webm'}));
+    };
+    mediaRecorder.start();
+    micActive = true;
+    const btn = document.getElementById('mic-btn');
+    if (btn) btn.classList.add('recording');
+  } catch (e) {
+    showToast('マイクの使用が許可されていません');
+  }
+}
+
+function stopMic() {
+  micActive = false;
+  const btn = document.getElementById('mic-btn');
+  if (btn) btn.classList.remove('recording');
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+async function transcribeAudio(blob) {
+  const btn = document.getElementById('mic-btn');
+  if (btn) btn.disabled = true;
+  showToast('文字起こし中...');
+  try {
+    const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+    const form = new FormData();
+    form.append('file', blob, `audio.${ext}`);
+    form.append('model', 'whisper-1');
+    form.append('language', 'ja');
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {'Authorization': `Bearer ${getOpenAIKey()}`},
+      body: form
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
+    }
+    const data = await resp.json();
+    const ta = document.getElementById('note-input');
+    const base = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
+    ta.value = base + (data.text || '');
+    showToast('文字起こし完了');
+  } catch (e) {
+    showToast('文字起こしエラー: ' + (e.message || '失敗しました'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function onGenerate() {
+  if (!selectedEval) { showToast('全体評価を選んでください'); return; }
+  const apiKey = getApiKey();
+  if (!apiKey) { showToast('設定でAPIキーを登録してください'); showTab('settings'); return; }
+
+  const seq = ++genSeq;
+  const student = currentStudent;
+  const note = document.getElementById('note-input').value.trim();
+  const wantBlog = document.getElementById('blog-enable').checked;
+
+  setLoading(true);
+  let text;
+  try {
+    text = await generateReport(student, currentReportType, selectedEval, selectedChips, note, selectedLength);
+  } catch(e) {
+    showToast('エラー: ' + (e.message || '生成に失敗しました'));
+    setLoading(false);
+    return;
+  }
+  setLoading(false);
+  if (seq !== genSeq) return;
+
+  document.getElementById('result-ta').value = text;
+  const rs = document.getElementById('result-section');
+  rs.classList.add('visible');
+  setTimeout(() => rs.scrollIntoView({behavior:'smooth', block:'nearest'}), 100);
+
+  // 報告文のネガチェ と ブログ生成 を並行で実行
+  const blogSection = document.getElementById('blog-section');
+  blogSection.hidden = !wantBlog;
+  document.getElementById('blog-ta').value = '';
+  document.getElementById('blog-check').hidden = true;
+  const jobs = [runCheck('report', seq), extractKarteCands(student, note, seq)];
+  if (wantBlog) jobs.push(generateBlogAndCheck(student, text, note, seq));
+  await Promise.all(jobs);
+}
+
+// ─── CLAUDE API 共通 ──────────────────────────────────────
+async function callClaude(system, user, maxTokens) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': getApiKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{role: 'user', content: user}]
+    })
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
+  }
+  const data = await resp.json();
+  return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
+}
+
+// ─── ブログ記事生成 ───────────────────────────────────────
+const BLOG_TEACHERS = [
+  '宮永先生（ミヤ）','高山先生（そうご）','白田先生（おいたん）','伊藤先生（いとぅー）',
+  '村上先生（ASK）','米本先生（ヨネ）','宮下先生（けんご）','飯塚先生（づかっち）',
+  '沼田先生（ぬま）','菅原先生（ゆめ）','杏樹先生（あんじゅ）'
+];
+const DEFAULT_BLOG_TEACHER = '高山先生（そうご）';
+const CLAUDE_MODEL = 'claude-opus-4-8';
+let genSeq = 0;
+
+function onBlogToggle(el) {
+  document.getElementById('blog-teacher-row').style.display = el.checked ? '' : 'none';
+  saveSetting({blogEnabled: el.checked});
+}
+function onBlogTeacherChange(el) { saveSetting({blogTeacher: el.value}); }
+
+function saveSetting(obj) {
+  Object.assign(settingsCache, obj);
+  const { db, doc, setDoc } = window.fb;
+  return setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), obj, {merge: true});
+}
+
+function blogGradeLabel(s) {
+  if (s.level === '小学生') return s.grade ? `小学${s.grade}年生` : '小学生';
+  if (s.level === '中学生') return s.grade ? `中学${s.grade}年生` : '中学生';
+  if (s.level === '高校生') return s.grade ? `高校${s.grade}年生` : '高校生';
+  return s.level || '';
+}
+
+function getBlogSamples() {
+  return (settingsCache.blogSamples || '').split(/\n-{3,}\n/).map(t => t.trim()).filter(Boolean);
+}
+
+async function generateBlog(student, reportText, note) {
+  const teacher = document.getElementById('blog-teacher').value || DEFAULT_BLOG_TEACHER;
+  const samples = getBlogSamples();
+  const system = `あなたは個別指導塾「EIMEI」の講師ブログ「生徒自慢ブログ」の記事を書くアシスタントです。
+講師が日々の指導で見た生徒の頑張りを、塾のホームページで紹介する記事を書きます。読者は在籍生の保護者と、入塾を検討しているご家庭です。
+
+ルール:
+- 書き手は「${teacher}」。講師本人の一人称で、熱血・温かみ・ユーモアのあるトーンで書く。
+- 生徒の名前（姓・名・あだ名・イニシャル）、保護者名、学校名、部活のチーム名、住所など、個人が特定できる情報は絶対に書かない。生徒は「${blogGradeLabel(student)}の生徒」「この生徒」などと表す。
+- 点数や順位は、本人が特定されない範囲で、前向きな文脈なら書いてよい。
+- 保護者向け報告に含まれる課題・注意点・体調・欠席などのネガティブな内容は、公開記事には書かない。頑張っている点と今後への期待に焦点を当てる。
+- 他の生徒・学校・他塾を下げる表現は使わない。
+- 出力形式は次のとおり。前置きや説明は書かない。
+タイトル：（30字以内）
+
+（本文：400〜600字程度。最後に生徒への応援メッセージで締める）`
+    + (samples.length ? `\n\n【過去記事の文体サンプル（文体・構成を真似る）】\n${samples.join('\n\n---\n\n')}` : '');
+
+  const user = `以下の保護者向け報告文と指導メモをもとに、ブログ記事を書いてください。
+
+学年: ${blogGradeLabel(student)}
+
+【保護者向け報告文】
+${reportText}
+
+【指導メモ・文字起こし】
+${note || '（なし）'}`;
+  return callClaude(system, user, 1500);
+}
+
+async function generateBlogAndCheck(student, reportText, note, seq) {
+  const box = document.getElementById('blog-check');
+  box.hidden = false;
+  box.className = 'check-box loading';
+  box.textContent = '✍️ ブログ記事を作成中...';
+  try {
+    const blog = await generateBlog(student, reportText, note);
+    if (seq !== genSeq) return;
+    document.getElementById('blog-ta').value = blog;
+  } catch (e) {
+    if (seq !== genSeq) return;
+    box.className = 'check-box bad';
+    box.textContent = 'ブログ生成エラー: ' + (e.message || '失敗しました');
+    return;
+  }
+  await runCheck('blog', seq);
+}
+
+async function onRegenerateBlog() {
+  if (!currentStudent) return;
+  const reportText = document.getElementById('result-ta').value.trim();
+  if (!reportText) { showToast('先に報告文を生成してください'); return; }
+  const seq = genSeq;
+  await generateBlogAndCheck(currentStudent, reportText, document.getElementById('note-input').value.trim(), seq);
+}
+
+function onCopyBlog() {
+  const text = document.getElementById('blog-ta').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast('ブログ記事をコピーしました'));
+}
+
+// ─── ネガチェック ─────────────────────────────────────────
+const lastRevised = {report: '', blog: ''};
+
+function nameParts(student) {
+  const parts = [];
+  [student.name, student.parentName].forEach(n => {
+    if (!n) return;
+    const t = n.trim();
+    parts.push(t.replace(/\s+/g, ''));
+    t.split(/[\s　]+/).forEach(p => { if (p.length >= 2) parts.push(p); });
+  });
+  return [...new Set(parts)];
+}
+
+function getNgWords() {
+  return (settingsCache.ngWords || '').split(/[\n,、]+/).map(w => w.trim()).filter(Boolean);
+}
+
+function localCheck(kind, text, student) {
+  const issues = [];
+  getNgWords().forEach(w => {
+    if (text.includes(w)) issues.push({level: '要修正', quote: w, reason: '登録したNGワードが含まれています', suggestion: '別の表現に言い換えてください'});
+  });
+  if (kind === 'blog') {
+    nameParts(student).forEach(p => {
+      if (text.includes(p)) issues.push({level: '要修正', quote: p, reason: '公開記事に生徒・保護者の名前が含まれています', suggestion: '名前を削除してください'});
+    });
+  }
+  return issues;
+}
+
+async function aiCheck(kind, text, student, note) {
+  const common = `指摘は本当に直すべきものだけに絞り、問題がなければ issues を空にしてください。
+出力は次のJSONのみ（コードブロック・前置きなし）:
+{"issues":[{"level":"要修正"または"注意","quote":"問題箇所の原文そのまま（短く）","reason":"理由","suggestion":"修正案"}],"revised":"指摘をすべて反映した全文（問題がなければ空文字）"}`;
+  const system = kind === 'report'
+    ? `あなたは塾から保護者へ送る連絡文の最終チェック担当です。次の観点で文章をチェックしてください。
+- 保護者を不安にさせる・責めていると受け取られる表現、生徒を否定・断定的に批判する表現
+- 他の生徒の名前や、他の生徒との比較
+- 指導メモにない事実の捏造、メモとの食い違い（点数・教科・日付など）
+- 生徒名・保護者名の誤り（正しくは 生徒「${student.name}」保護者「${student.parentName || '未登録'}」）
+- 敬語の誤り、誤字脱字、不自然な日本語
+- 塾内部の事情など保護者に送るべきでない内容
+${common}`
+    : `あなたは塾のホームページに公開するブログ記事の最終チェック担当です。次の観点で文章をチェックしてください。
+- 個人が特定できる情報（生徒名・あだ名・イニシャル・保護者名・学校名・部活チーム名・地名など）。この生徒の本名は「${student.name}」、保護者は「${student.parentName || '未登録'}」
+- 生徒の課題・欠席・体調・成績不振などネガティブな内容
+- 他の生徒・学校・他塾を下げる表現、誇大広告や合格保証と受け取られる表現
+- 指導メモにない事実の捏造
+- 誤字脱字、不自然な日本語
+${common}`;
+  const user = `【チェック対象】\n${text}\n\n【参考：指導メモ・文字起こし】\n${note || '（なし）'}`;
+  const raw = await callClaude(system, user, 2500);
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('チェック結果を読み取れませんでした');
+  const parsed = JSON.parse(m[0]);
+  return {issues: Array.isArray(parsed.issues) ? parsed.issues : [], revised: parsed.revised || ''};
+}
+
+async function runCheck(kind, seq) {
+  const ta  = document.getElementById(kind === 'report' ? 'result-ta' : 'blog-ta');
+  const box = document.getElementById(kind === 'report' ? 'report-check' : 'blog-check');
+  const text = ta.value.trim();
+  if (!text || !currentStudent) return;
+  const student = currentStudent;
+  const note = document.getElementById('note-input').value.trim();
+  box.hidden = false;
+  box.className = 'check-box loading';
+  box.textContent = '🛡️ ネガチェック中...';
+
+  const local = localCheck(kind, text, student);
+  let ai = {issues: [], revised: ''};
+  let aiError = '';
+  try { ai = await aiCheck(kind, text, student, note); }
+  catch (e) { aiError = e.message || 'チェックに失敗しました'; }
+  if (seq !== genSeq || ta.value.trim() !== text) return; // 途中で再生成・編集された
+
+  const issues = [...local, ...ai.issues];
+  lastRevised[kind] = ai.revised;
+  const hasMust = issues.some(i => i.level === '要修正');
+  const title = kind === 'report' ? '報告文' : 'ブログ記事';
+
+  if (aiError) {
+    box.className = 'check-box warn';
+  } else {
+    box.className = 'check-box ' + (!issues.length ? 'ok' : hasMust ? 'bad' : 'warn');
+  }
+  const head = aiError
+    ? `⚠️ AIチェックに失敗しました（${esc(aiError)}）。目視で確認してください`
+    : !issues.length ? `✅ ${title}：ネガチェックOK` : `🛡️ ${title}：${issues.length}件の指摘`;
+  box.innerHTML = `<div class="check-head">${head}</div>` +
+    issues.map(i => `
+      <div class="check-issue">
+        <span class="check-tag${i.level === '要修正' ? ' must' : ''}">${esc(i.level || '注意')}</span>
+        <span class="check-quote">「${esc(i.quote || '')}」</span>
+        <div>${esc(i.reason || '')}</div>
+        ${i.suggestion ? `<div class="check-sugg">→ ${esc(i.suggestion)}</div>` : ''}
+      </div>`).join('') +
+    `<div class="check-actions">
+      ${ai.revised ? `<button class="btn btn-green" onclick="applyRevised('${kind}')">✏️ 修正版を反映</button>` : ''}
+      <button class="btn btn-outline" onclick="runCheck('${kind}', genSeq)">🔁 再チェック</button>
+    </div>`;
+}
+
+// ─── 生徒カルテ ───────────────────────────────────────────
+const NOTE_CATS = ['好きなこと', '雑談', '家庭・部活', '学習', 'その他'];
+let karteStudentId = null;
+let karteReturn    = 'home';
+let karteCat       = '好きなこと';
+let karteCands     = [];   // 文字起こしから抽出したカルテ候補
+
+function notesFor(studentId) { return notesCache.filter(n => n.studentId === studentId); }
+function reportsFor(studentId) { return getReports().filter(r => r.studentId === studentId); }
+
+function fmtYMD(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function openKarte(studentId) {
+  if (!studentId) return;
+  const active = document.querySelector('.screen.active');
+  const from = active ? active.id.replace('screen-', '') : 'home';
+  if (from !== 'karte') karteReturn = from;
+  karteStudentId = studentId;
+  document.getElementById('karte-note-input').value = '';
+  hideAllScreens();
+  document.getElementById('screen-karte').classList.add('active');
+  renderKarte();
+}
+
+function closeKarte() {
+  hideAllScreens();
+  if (karteReturn === 'create' || karteReturn === 'type') {
+    document.getElementById('screen-' + karteReturn).classList.add('active');
+  } else {
+    showTab(['home','history','settings'].includes(karteReturn) ? karteReturn : 'home');
+  }
+}
+
+function renderKarte() {
+  const s = getStudents().find(x => x.id === karteStudentId);
+  if (!s) return;
+  document.getElementById('karte-sname').textContent = `${s.name} のカルテ`;
+  document.getElementById('karte-ssub').textContent  = `${gradeLabel(s)}${s.parentName ? ' · 保護者: ' + s.parentName : ''}`;
+
+  document.getElementById('karte-cat-wrap').innerHTML = NOTE_CATS.map(c =>
+    `<div class="chip${c === karteCat ? ' sel' : ''}" onclick="selectKarteCat('${c}')">${c}</div>`).join('');
+
+  const notes = notesFor(s.id);
+  document.getElementById('karte-notes').innerHTML = notes.length
+    ? notes.map(n => `
+      <div class="note-item">
+        <div class="note-item-main">
+          <div class="note-item-meta"><span class="note-cat c-${esc(n.category||'その他')}">${esc(n.category||'その他')}</span>${fmtYMD(n.createdAt)}${n.source === 'auto' ? ' · 文字起こしから' : ''}</div>
+          <div class="note-item-text">${esc(n.text)}</div>
+        </div>
+        <button class="icon-btn" style="font-size:16px;" onclick="editKarteNote('${n.id}')">✏️</button>
+        <button class="icon-btn" style="font-size:16px;" onclick="deleteKarteNote('${n.id}')">🗑️</button>
+      </div>`).join('')
+    : `<div class="empty" style="padding:20px 16px;"><p style="font-size:13px;">まだメモがありません。<br>報告を作ると、文字起こしから好きなことや雑談を自動で拾って候補に出します。</p></div>`;
+
+  const reports = reportsFor(s.id);
+  document.getElementById('karte-reports').innerHTML = reports.length
+    ? reports.map(r => `
+      <div class="history-item" onclick="openReportModal('${r.id}')">
+        <div class="hi-meta">${fmtYMD(r.sentAt)} · ${REPORT_TYPE_LABEL[r.reportType || 'class']}${r.blogBody ? ' · 📝ブログあり' : ''}</div>
+        <div class="hi-preview">${esc(r.body)}</div>
+      </div>`).join('')
+    : `<div class="empty" style="padding:20px 16px;"><p style="font-size:13px;">まだ報告がありません</p></div>`;
+}
+
+function selectKarteCat(c) { karteCat = c; renderKarte(); }
+
+async function saveNote(studentId, category, text, source, id) {
+  const { db, doc, setDoc } = window.fb;
+  const existing = id ? notesCache.find(n => n.id === id) : null;
+  await setDoc(doc(db, 'users', fbUser.uid, 'notes', id || uid()), {
+    studentId, category, text, source: source || 'manual',
+    createdAt: existing ? existing.createdAt : new Date().toISOString()
+  });
+}
+
+async function addKarteNote() {
+  const ta = document.getElementById('karte-note-input');
+  const text = ta.value.trim();
+  if (!text) { showToast('メモを入力してください'); return; }
+  await saveNote(karteStudentId, karteCat, text, 'manual');
+  ta.value = '';
+  showToast('カルテに追加しました');
+}
+
+async function editKarteNote(id) {
+  const n = notesCache.find(x => x.id === id);
+  if (!n) return;
+  const text = prompt('メモを編集', n.text);
+  if (text === null || !text.trim()) return;
+  await saveNote(n.studentId, n.category, text.trim(), n.source, id);
+  showToast('更新しました');
+}
+
+async function deleteKarteNote(id) {
+  if (!confirm('このメモを削除しますか？')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'notes', id));
+  showToast('削除しました');
+}
+
+// 報告文生成に渡すカルテ情報
+function karteContext(student) {
+  const notes = notesFor(student.id).slice(0, 15);
+  const reports = reportsFor(student.id).slice(0, 2);
+  if (!notes.length && !reports.length) return '';
+  let out = '';
+  if (notes.length) {
+    out += '好きなこと・雑談メモ:\n' + notes.map(n => `- [${n.category}] ${n.text}（${fmtYMD(n.createdAt)}）`).join('\n');
+  }
+  if (reports.length) {
+    out += (out ? '\n\n' : '') + '直近の報告:\n' + reports.map(r =>
+      `- ${fmtYMD(r.sentAt)}（${REPORT_TYPE_LABEL[r.reportType || 'class']}）: ${(r.body || '').replace(/\s+/g, ' ').slice(0, 300)}`).join('\n');
+  }
+  return out;
+}
+
+// 文字起こしからカルテ候補を抽出
+async function extractKarteCands(student, note, seq) {
+  const box = document.getElementById('karte-cand');
+  karteCands = [];
+  if (!note || note.length < 20) { box.hidden = true; return; }
+  box.hidden = false;
+  box.className = 'check-box karte-box loading';
+  box.textContent = '📒 文字起こしからカルテに残す話題を探しています...';
+  const existing = notesFor(student.id).slice(0, 30).map(n => `- ${n.text}`).join('\n') || '（なし）';
+  const system = `あなたは塾講師のアシスタントです。指導中の会話の文字起こしから、この生徒について今後の会話や報告に役立つ情報を抜き出して「生徒カルテ」に残します。
+抜き出す対象:
+- 好きなこと（趣味・推し・好きな教科・ハマっているもの・将来の夢など）
+- 雑談の話題（最近の出来事・楽しみにしていること・話して盛り上がったこと）
+- 家庭・部活（部活の様子・大会・習い事・家族とのイベントなど、本人が話した範囲）
+- 学習（苦手・得意の傾向、効果のあった勉強法など、次回以降も参考になること）
+ルール:
+- 1件は1行の短い文。文字起こしに出てきた事実だけを書き、推測しない。
+- 体調・病気・家庭の事情・人間関係のトラブルなどデリケートな内容は抜き出さない。
+- 既存メモと同じ内容は出さない。
+- 該当がなければ空配列。最大6件。
+出力は次のJSONのみ（コードブロック・前置きなし）:
+{"notes":[{"category":"好きなこと|雑談|家庭・部活|学習","text":"..."}]}`;
+  const user = `生徒: ${student.name}（${gradeLabel(student)}）\n\n【既存のカルテメモ】\n${existing}\n\n【今回の文字起こし】\n${note}`;
+  try {
+    const raw = await callClaude(system, user, 1000);
+    if (seq !== genSeq) return;
+    const m = raw.match(/\{[\s\S]*\}/);
+    const parsed = m ? JSON.parse(m[0]) : {notes: []};
+    karteCands = (parsed.notes || []).filter(n => n && n.text).map(n => ({
+      category: NOTE_CATS.includes(n.category) ? n.category : 'その他',
+      text: String(n.text).trim(), checked: true, saved: false
+    }));
+  } catch (e) {
+    if (seq !== genSeq) return;
+    box.className = 'check-box warn';
+    box.textContent = 'カルテ候補の抽出に失敗しました: ' + (e.message || '');
+    return;
+  }
+  renderKarteCands();
+}
+
+function renderKarteCands() {
+  const box = document.getElementById('karte-cand');
+  if (!karteCands.length) {
+    box.className = 'check-box karte-box';
+    box.innerHTML = '<div class="check-head">📒 今回はカルテに残す新しい話題はありませんでした</div>';
+    return;
+  }
+  const allSaved = karteCands.every(c => c.saved || !c.checked);
+  box.className = 'check-box karte-box';
+  box.innerHTML = `<div class="check-head">📒 カルテに残す候補（${karteCands.length}件）</div>` +
+    karteCands.map((c, i) => `
+      <label class="cand-item">
+        <input type="checkbox" ${c.checked ? 'checked' : ''} ${c.saved ? 'disabled' : ''} onchange="karteCands[${i}].checked=this.checked;renderKarteCands()">
+        <span><span class="note-cat c-${esc(c.category)}">${esc(c.category)}</span> ${esc(c.text)}${c.saved ? ' <b style="color:var(--green);">✓保存済</b>' : ''}</span>
+      </label>`).join('') +
+    `<div class="check-actions">
+      <button class="btn btn-green" onclick="saveKarteCands()" ${allSaved ? 'disabled' : ''}>📒 選んだものをカルテに保存</button>
+    </div>
+    <div class="settings-hint">「送信済みにする」を押したときも、チェックが入っているものは自動で保存されます。</div>`;
+}
+
+async function saveKarteCands(silent) {
+  const student = currentStudent;
+  if (!student) return;
+  const targets = karteCands.filter(c => c.checked && !c.saved);
+  if (!targets.length) return;
+  for (const c of targets) {
+    await saveNote(student.id, c.category, c.text, 'auto');
+    c.saved = true;
+  }
+  renderKarteCands();
+  if (!silent) showToast(`カルテに${targets.length}件保存しました`);
+}
+
+function applyRevised(kind) {
+  const revised = lastRevised[kind];
+  if (!revised) return;
+  document.getElementById(kind === 'report' ? 'result-ta' : 'blog-ta').value = revised;
+  showToast('修正版を反映しました');
+  runCheck(kind, genSeq);
+}
+
+function onCopy() {
+  const text = document.getElementById('result-ta').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast('コピーしました'));
+}
+
+async function onMarkSent() {
+  const text = document.getElementById('result-ta').value;
+  if (!text) { showToast('先に文章を生成してください'); return; }
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'reports', uid()), {
+    studentId:   currentStudent.id,
+    studentName: currentStudent.name,
+    level:       currentStudent.level,
+    reportType:  currentReportType,
+    body:        text,
+    blogBody:    document.getElementById('blog-ta').value || '',
+    sentAt:      new Date().toISOString()
+  });
+  navigator.clipboard.writeText(text).catch(() => {});
+  try { await saveKarteCands(true); } catch (e) {}
+  showToast('送信済みに記録しました');
+  setTimeout(() => goHome(), 800);
+}
+
+// ─── AI GENERATION ────────────────────────────────────────
+async function generateReport(student, reportType, evalType, chips, note, length) {
+  const apiKey = getApiKey();
+  const styles = getStyles();
+  const samples = ((styles[student.level] || {})[reportType] || []).map(sp => sp.text).filter(Boolean);
+  const styleSample = samples.join('\n\n---\n\n');
+  const typeLabel = REPORT_TYPE_LABEL[reportType];
+  const lengthOpt = LENGTH_OPTIONS.find(o => o.key === length) || LENGTH_OPTIONS[1];
+
+  const extraInstruction = {
+    test:    '追加メモには音声を文字起こししたテキストがそのまま含まれる場合があります。その中から教科名・点数・目標との比較・本人の様子など重要な情報を抽出し、簡潔で分かりやすい報告文にまとめてください。',
+    pretest: 'これはテスト前の報告です。まだテスト結果は出ていないので、結果や点数を書かないでください。追加メモには音声を文字起こししたテキストがそのまま含まれる場合があります。その中からテストの日程・範囲・目標点・今の準備状況・テストまでの学習計画など重要な情報を抽出してください。必要であれば、ご家庭で声かけやサポートをお願いする一文も入れてください。'
+  }[reportType] || '';
+
+  const systemPrompt = (styleSample
+    ? `あなたは保護者への連絡文を書くアシスタントです。以下の例文を参考に、同じ文体・口調・言い回しで連絡文を生成してください。出力は連絡文のみ（前置き・説明なし）。\n\n【文体サンプル（${student.level}・${typeLabel}）】\n${styleSample}`
+    : 'あなたは保護者への連絡文を書くアシスタントです。丁寧で温かみのある文体で連絡文を生成してください。出力は連絡文のみ（前置き・説明なし）。'
+  ) + (extraInstruction ? `\n\n${extraInstruction}` : '')
+    + `\n\n「生徒カルテ」が渡された場合は参考情報として使ってください。前回の報告からの変化に触れたり、好きなことの話題に自然に一言触れたりする程度にとどめ、無理に使ったりメモを羅列したりしないでください。今回のメモと矛盾する場合は今回のメモを優先してください。`
+    + `\n\n文章の長さ: ${lengthOpt.desc}`;
+  const karte = karteContext(student);
+
+  const chipsText = chips.length ? chips.join('、') : '（特になし）';
+  const userPrompt = `以下の情報で保護者への連絡文を生成してください。
+
+生徒名: ${student.name}
+保護者: ${student.parentName ? student.parentName + '様' : '保護者様'}
+学年区分: ${student.level}${student.grade ? `（${student.grade}年生）` : ''}
+報告種別: ${typeLabel}
+全体評価: ${evalType}
+具体的なポイント: ${chipsText}
+追加メモ: ${note || '（なし）'}
+${karte ? `\n【生徒カルテ（参考）】\n${karte}\n` : ''}
+連絡文のみ出力してください。`;
+
+  return callClaude(systemPrompt, userPrompt, lengthOpt.tokens);
+}
+
+// ─── HISTORY ─────────────────────────────────────────────
+function renderHistory() {
+  const reports = getReports();
+  const el = document.getElementById('history-list');
+  if (!reports.length) {
+    el.innerHTML = `<div class="empty"><div class="big">📋</div><p>まだ送信履歴がありません。</p></div>`;
+    return;
+  }
+
+  const q = historySearchQuery.trim().toLowerCase();
+  const filtered = q
+    ? reports.filter(r => (r.studentName||'').toLowerCase().includes(q))
+    : reports;
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="big">🔍</div><p>「${esc(historySearchQuery)}」に一致する履歴がありません。</p></div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const d = new Date(r.sentAt);
+    const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const rt = r.reportType || 'class';
+    return `<div class="history-item" onclick="openReportModal('${r.id}')">
+      <div class="hi-meta">
+        ${dateStr}
+        <span class="badge badge-${r.level}" style="font-size:10px;">${r.level}</span>
+        <span class="badge badge-type-${rt}" style="font-size:10px;">${REPORT_TYPE_LABEL[rt]}</span>
+      </div>
+      <div class="hi-name">${esc(r.studentName)}</div>
+      <div class="hi-preview">${esc(r.body)}</div>
+    </div>`;
+  }).join('');
+}
+
+function openReportModal(id) {
+  const r = getReports().find(x => x.id === id);
+  if (!r) return;
+  modalReportId = id;
+  const d  = new Date(r.sentAt);
+  const rt = r.reportType || 'class';
+  document.getElementById('mreport-title').textContent = r.studentName;
+  document.getElementById('mreport-meta').textContent  = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} · ${r.level} · ${REPORT_TYPE_LABEL[rt]}`;
+  document.getElementById('mreport-body').textContent  = r.body;
+  document.getElementById('mreport-blog-wrap').hidden = !r.blogBody;
+  document.getElementById('mreport-blog').textContent = r.blogBody || '';
+  openModal('modal-report');
+}
+
+function copyBlogModal() {
+  const text = document.getElementById('mreport-blog').textContent;
+  if (text) navigator.clipboard.writeText(text).then(() => showToast('ブログ記事をコピーしました'));
+}
+
+function copyReportModal() {
+  const text = document.getElementById('mreport-body').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('コピーしました'));
+}
+
+async function deleteReportModal() {
+  if (!confirm('この履歴を削除しますか？')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'reports', modalReportId));
+  closeModal('modal-report');
+  showToast('削除しました');
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────
+function showSettingsTab(tab) {
+  settingsTabNow = tab;
+  ['api','style','students'].forEach(t =>
+    document.getElementById('stab-'+t).classList.toggle('active', t===tab)
+  );
+  renderSettings();
+}
+
+function renderSettings() {
+  const body = document.getElementById('settings-body');
+  const tab  = settingsTabNow;
+
+  if (tab === 'api') {
+    const apiKey = getApiKey();
+    const status = apiKey
+      ? `<span class="api-ok set">✓ 設定済み</span>`
+      : `<span class="api-ok none">未設定</span>`;
+    const openaiKey = getOpenAIKey();
+    const openaiStatus = openaiKey
+      ? `<span class="api-ok set">✓ 設定済み</span>`
+      : `<span class="api-ok none">未設定</span>`;
+    body.innerHTML = `
+      <div class="settings-group">
+        <label>Claude APIキー ${status}</label>
+        <input class="settings-input" type="password" id="api-key-input" value="${esc(apiKey)}" placeholder="sk-ant-..." oninput="autoSaveApiKey(this)" onpaste="setTimeout(()=>autoSaveApiKey(this),0)">
+        <div class="settings-hint">入力すると自動で保存されます。Anthropic Consoleで取得したキーを貼り付けてください。</div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: claude-opus-4-8</div>
+      </div>
+      <div class="settings-group">
+        <label>OpenAI APIキー（音声入力用） ${openaiStatus}</label>
+        <input class="settings-input" type="password" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." oninput="autoSaveOpenAIKey(this)" onpaste="setTimeout(()=>autoSaveOpenAIKey(this),0)">
+        <div class="settings-hint">メモ欄の🎤音声入力（Whisper）で使用します。OpenAI Platformで取得したキーを貼り付けてください。</div>
+      </div>
+      <div class="settings-group">
+        <button class="btn btn-outline" onclick="doLogout()">ログアウト</button>
+      </div>`;
+    return;
+  }
+
+  if (tab === 'style') {
+    const styles = getStyles();
+    body.innerHTML = `
+      <div style="padding:12px 16px 6px;font-size:13px;color:var(--gray);line-height:1.6;">
+        過去に書いた報告文を追加すると、AIがその文体を真似て文章を生成します。学年区分・報告種別ごとに複数の文例を登録できます。
+      </div>
+      ${LEVELS.map(lv => typesForLevel(lv).map(t => {
+        const samples = (styles[lv] || {})[t] || [];
+        const listHtml = samples.length
+          ? samples.map(sp => `
+              <div class="st-item">
+                <div class="st-item-info">
+                  <div class="st-item-name" style="font-size:13px;font-weight:400;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:pre-wrap;">${esc(sp.text)}</div>
+                </div>
+                <button class="icon-btn" onclick="editStyleSample('${lv}','${t}','${sp.id}')">✏️</button>
+                <button class="icon-btn" onclick="deleteStyleSample('${lv}','${t}','${sp.id}')">🗑️</button>
+              </div>`).join('')
+          : `<div class="empty" style="padding:20px 16px;"><p style="font-size:13px;">まだ文例がありません</p></div>`;
+        return `
+          <div class="settings-group" style="margin-top:20px;">
+            <label>${lv} · ${REPORT_TYPE_LABEL[t]}の文体サンプル（${samples.length}件）</label>
+          </div>
+          <div>${listHtml}</div>
+          <div class="settings-group">
+            <button class="btn btn-outline" onclick="openAddStyleSample('${lv}','${t}')">＋ ${lv}・${REPORT_TYPE_LABEL[t]}の文例を追加</button>
+          </div>`;
+      }).join('')).join('')}
+      <div class="settings-group" style="margin-top:28px;">
+        <label>ブログ記事の文体サンプル</label>
+        <textarea class="settings-ta" id="blog-samples-input" rows="8" placeholder="過去に公開したブログ記事を貼り付けてください。複数ある場合は「---」だけの行で区切ります。">${esc(settingsCache.blogSamples || '')}</textarea>
+        <div class="settings-hint">ブログ記事を作るとき、この文体・構成を真似します。</div>
+      </div>
+      <div class="settings-group">
+        <label>NGワード（ネガチェック用）</label>
+        <textarea class="settings-ta" id="ng-words-input" rows="4" placeholder="1行に1つ、または「、」区切り&#10;例: 怠けている、やる気がない、他塾">${esc(settingsCache.ngWords || '')}</textarea>
+        <div class="settings-hint">報告文・ブログ記事にこの言葉が入っていたら「要修正」として表示します。</div>
+      </div>
+      <div class="settings-group">
+        <button class="btn btn-blue" onclick="saveBlogSettings()">ブログ・NGワード設定を保存</button>
+      </div>
+    `;
+    return;
+  }
+
+  if (tab === 'students') {
+    const students = getStudents();
+    const listHtml = students.length
+      ? [...students].sort(compareStudents).map(s => `
+          <div class="st-item">
+            <div class="st-item-info">
+              <div class="st-item-name">${esc(s.name)}</div>
+              <div class="st-item-meta">
+                ${esc(s.parentName||'—')} ·
+                <span class="badge badge-${s.level}" style="font-size:10px;">${gradeLabel(s)}</span>
+              </div>
+            </div>
+            <button class="icon-btn" onclick="editStudent('${s.id}')">✏️</button>
+            <button class="icon-btn" onclick="deleteStudent('${s.id}')">🗑️</button>
+          </div>`).join('')
+      : `<div class="empty" style="padding:32px 24px;"><p>まだ生徒がいません</p></div>`;
+
+    body.innerHTML = `
+      <div class="settings-group">
+        <button class="btn btn-blue" onclick="openAddStudent()">＋ 生徒を追加</button>
+      </div>
+      <div style="margin-top:12px;">${listHtml}</div>
+      <div class="settings-group" style="margin-top:24px;">
+        <label>データのバックアップ</label>
+        <div class="settings-hint" style="margin-bottom:10px;">生徒・送信履歴・文体サンプル・カルテメモをJSONファイルとして保存/復元できます。</div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="exportBackup()">⬇️ エクスポート</button>
+          <button class="btn btn-outline" onclick="document.getElementById('import-file-input').click()">⬆️ インポート</button>
+        </div>
+        <input type="file" id="import-file-input" accept="application/json" style="display:none;" onchange="importBackup(this)">
+      </div>`;
+  }
+}
+
+function autoSaveApiKey(input) {
+  const val = input.value.trim();
+  const { db, doc, setDoc } = window.fb;
+  setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), {apiKey: val}, {merge: true});
+  const label = input.closest('.settings-group').querySelector('label');
+  if (label) {
+    label.innerHTML = `Claude APIキー ${val
+      ? '<span class="api-ok set">✓ 設定済み</span>'
+      : '<span class="api-ok none">未設定</span>'}`;
+  }
+  if (val) showToast('APIキーを保存しました');
+}
+
+async function saveBlogSettings() {
+  await saveSetting({
+    blogSamples: document.getElementById('blog-samples-input').value.trim(),
+    ngWords:     document.getElementById('ng-words-input').value.trim(),
+  });
+  showToast('保存しました');
+}
+
+function autoSaveOpenAIKey(input) {
+  const val = input.value.trim();
+  const { db, doc, setDoc } = window.fb;
+  setDoc(doc(db, 'users', fbUser.uid, 'settings', 'main'), {openaiApiKey: val}, {merge: true});
+  const label = input.closest('.settings-group').querySelector('label');
+  if (label) {
+    label.innerHTML = `OpenAI APIキー（音声入力用） ${val
+      ? '<span class="api-ok set">✓ 設定済み</span>'
+      : '<span class="api-ok none">未設定</span>'}`;
+  }
+  if (val) showToast('APIキーを保存しました');
+}
+
+function openAddStyleSample(level, type) {
+  document.getElementById('mstyle-title').textContent = `${level}・${REPORT_TYPE_LABEL[type]}の文例を追加`;
+  document.getElementById('msty-level').value = level;
+  document.getElementById('msty-type').value  = type;
+  document.getElementById('msty-id').value    = '';
+  document.getElementById('msty-text').value  = '';
+  openModal('modal-style');
+}
+
+function editStyleSample(level, type, id) {
+  const styles = getStyles();
+  const sample = ((styles[level] || {})[type] || []).find(x => x.id === id);
+  if (!sample) return;
+  document.getElementById('mstyle-title').textContent = `${level}・${REPORT_TYPE_LABEL[type]}の文例を編集`;
+  document.getElementById('msty-level').value = level;
+  document.getElementById('msty-type').value  = type;
+  document.getElementById('msty-id').value    = id;
+  document.getElementById('msty-text').value  = sample.text;
+  openModal('modal-style');
+}
+
+async function saveStyleSample() {
+  const text = document.getElementById('msty-text').value.trim();
+  if (!text) { showToast('文例を入力してください'); return; }
+  const level = document.getElementById('msty-level').value;
+  const type  = document.getElementById('msty-type').value;
+  const id    = document.getElementById('msty-id').value || uid();
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'styles', id), {level, type, text});
+  closeModal('modal-style');
+  showToast(document.getElementById('msty-id').value ? '更新しました' : '文例を追加しました');
+}
+
+async function deleteStyleSample(level, type, id) {
+  if (!confirm('この文例を削除しますか？')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'styles', id));
+  showToast('削除しました');
+}
+
+// ─── STUDENT CRUD ────────────────────────────────────────
+function openAddStudent() {
+  document.getElementById('mstudent-title').textContent = '生徒追加';
+  document.getElementById('mst-id').value     = '';
+  document.getElementById('mst-name').value   = '';
+  document.getElementById('mst-parent').value = '';
+  document.getElementById('mst-level').value  = '中学生';
+  updateGradeOptions(null);
+  document.getElementById('mst-note').value   = '';
+  openModal('modal-student');
+}
+
+function updateGradeOptions(selected) {
+  const level = document.getElementById('mst-level').value;
+  const sel = document.getElementById('mst-grade');
+  const keep = selected !== undefined ? selected : Number(sel.value) || null;
+  const n = GRADE_COUNT[level] || 0;
+  sel.innerHTML = `<option value="">未設定</option>` +
+    Array.from({length: n}, (_, i) => `<option value="${i+1}">${LEVEL_SHORT[level]}${i+1}（${i+1}年生）</option>`).join('');
+  sel.value = keep && keep <= n ? String(keep) : '';
+}
+
+function editStudent(id) {
+  const s = getStudents().find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('mstudent-title').textContent = '生徒編集';
+  document.getElementById('mst-id').value     = id;
+  document.getElementById('mst-name').value   = s.name;
+  document.getElementById('mst-parent').value = s.parentName || '';
+  document.getElementById('mst-level').value  = s.level;
+  updateGradeOptions(s.grade || null);
+  document.getElementById('mst-note').value   = s.note || '';
+  openModal('modal-student');
+}
+
+async function saveStudent() {
+  const name = document.getElementById('mst-name').value.trim();
+  if (!name) { showToast('生徒名を入力してください'); return; }
+  const id  = document.getElementById('mst-id').value || uid();
+  const obj = {
+    name,
+    parentName: document.getElementById('mst-parent').value.trim(),
+    level:      document.getElementById('mst-level').value,
+    grade:      Number(document.getElementById('mst-grade').value) || null,
+    note:     document.getElementById('mst-note').value.trim(),
+  };
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'students', id), obj);
+  closeModal('modal-student');
+  showToast(document.getElementById('mst-id').value ? '更新しました' : '生徒を追加しました');
+}
+
+async function deleteStudent(id) {
+  const s = getStudents().find(x => x.id === id);
+  if (!s || !confirm(`「${s.name}」を削除しますか？`)) return;
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'students', id));
+  showToast('削除しました');
+}
+
+// ─── CLOSE MODALS ON BACKDROP CLICK ─────────────────────
+document.querySelectorAll('.modal-overlay').forEach(el =>
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); })
+);
+
+// ─── INIT ────────────────────────────────────────────────
+// App rendering starts once Firebase auth resolves (see fb-ready listener above).
+</script>
+</body>
+</html>
