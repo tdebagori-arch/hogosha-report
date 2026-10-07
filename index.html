@@ -250,6 +250,13 @@ details.q-details summary{font-size:12px;color:var(--gray);cursor:pointer;font-w
 .cand-item{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:13px;line-height:1.5;}
 .cand-item input{margin-top:3px;width:16px;height:16px;flex-shrink:0;}
 .karte-box{border-color:var(--purple);background:var(--purple-l);}
+.reply-card{border-top:1px solid var(--gray-bd);padding:12px 16px;display:flex;flex-direction:column;gap:8px;}
+.reply-style{font-size:13px;font-weight:700;}
+.reply-card .result-ta{min-height:120px;}
+.msg-item{padding:10px 16px;border-top:1px solid var(--gray-bd);display:flex;gap:8px;align-items:flex-start;}
+.msg-line{font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.msg-who{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-right:4px;background:var(--gray-l);color:var(--gray);}
+.msg-who.me{background:var(--blue-l);color:var(--blue-dk);}
 
 /* HISTORY */
 .history-list{flex:1;overflow-y:auto;}
@@ -396,6 +403,19 @@ body.logged-out .bottom-nav{display:none;}
         <button class="btn btn-blue" style="padding:10px;font-size:14px;" onclick="addKarteNote()">＋ メモを追加</button>
       </div>
       <div id="karte-notes" style="margin-top:12px;"></div>
+    </div>
+    <div class="karte-sec">
+      <div class="step-label">保護者からのメッセージに返信する</div>
+      <div class="karte-add">
+        <textarea class="note-input" id="reply-parent-input" rows="4" placeholder="LINEで届いた保護者からのメッセージを貼り付けてください"></textarea>
+        <button class="btn btn-blue" id="reply-gen-btn" style="padding:10px;font-size:14px;" onclick="onGenerateReplies()">✨ 返信案を3つ作る</button>
+        <div class="settings-hint">カルテのメモと直近の報告を踏まえて「丁寧／簡潔／相談に踏み込む」の3パターンを作り、それぞれネガチェックします。</div>
+      </div>
+      <div id="reply-results"></div>
+    </div>
+    <div class="karte-sec">
+      <div class="step-label">保護者とのやりとり</div>
+      <div id="karte-messages"></div>
     </div>
     <div class="karte-sec">
       <div class="step-label">これまでの報告</div>
@@ -864,6 +884,11 @@ function subscribeAll(uid) {
       .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
     rerenderCurrentScreen();
   }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'messages'), snap => {
+    messagesCache = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+    rerenderCurrentScreen();
+  }));
   fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'drafts'), snap => {
     draftsCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
     rerenderCurrentScreen();
@@ -877,7 +902,7 @@ function subscribeAll(uid) {
 function unsubscribeAll() {
   fsUnsubs.forEach(u => u());
   fsUnsubs = [];
-  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {}; notesCache = []; draftsCache = [];
+  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {}; notesCache = []; draftsCache = []; messagesCache = [];
 }
 
 async function migrateLocalDataIfNeeded(uid) {
@@ -923,6 +948,7 @@ function exportBackup() {
     styles:   getStyles(),
     notes:    notesCache,
     drafts:   draftsCache,
+    messages: messagesCache,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
@@ -956,6 +982,10 @@ async function importBackup(input) {
     (data.notes || []).forEach(n => {
       const { id, ...rest } = n;
       batch.set(doc(db, 'users', fbUser.uid, 'notes', id || uid()), rest);
+    });
+    (data.messages || []).forEach(m => {
+      const { id, ...rest } = m;
+      batch.set(doc(db, 'users', fbUser.uid, 'messages', id || uid()), rest);
     });
     (data.drafts || []).forEach(d => {
       const { id, ...rest } = d;
@@ -1037,6 +1067,7 @@ let studentsCache = [];
 let reportsCache  = [];
 let notesCache    = [];
 let draftsCache   = [];
+let messagesCache = [];
 let stylesCache   = {};
 let settingsCache = {};
 let fsUnsubs      = [];
@@ -1886,7 +1917,18 @@ async function aiCheck(kind, text, student, note) {
   const common = `指摘は本当に直すべきものだけに絞り、問題がなければ issues を空にしてください。
 出力は次のJSONのみ（コードブロック・前置きなし）:
 {"issues":[{"level":"要修正"または"注意","quote":"問題箇所の原文そのまま（短く）","reason":"理由","suggestion":"修正案"}],"revised":"指摘をすべて反映した全文（問題がなければ空文字）"}`;
-  const system = kind === 'report'
+  const system = kind === 'reply'
+    ? `あなたは塾から保護者への返信メッセージ（LINE）の最終チェック担当です。次の観点で文章をチェックしてください。
+- 保護者を不安にさせる・責めていると受け取られる表現、生徒を否定・断定的に批判する表現
+- 保護者のメッセージへの答えになっていない、または質問・相談を見落としている
+- 参考情報（保護者のメッセージ・カルテ・過去の報告）にない事実の捏造
+- 塾として約束できるか分からないこと（日程変更・料金・成績保証など）を断定的に約束している
+- 他の生徒の名前や、他の生徒との比較
+- 生徒名・保護者名の誤り（正しくは 生徒「${student.name}」保護者「${student.parentName || '未登録'}」）
+- 敬語の誤り、誤字脱字、不自然な日本語
+- 塾内部の事情など保護者に送るべきでない内容
+${common}`
+    : kind === 'report'
     ? `あなたは塾から保護者へ送る連絡文の最終チェック担当です。次の観点で文章をチェックしてください。
 - 保護者を不安にさせる・責めていると受け取られる表現、生徒を否定・断定的に批判する表現
 - 他の生徒の名前や、他の生徒との比較
@@ -1902,7 +1944,8 @@ ${common}`
 - 指導メモにない事実の捏造
 - 誤字脱字、不自然な日本語
 ${common}`;
-  const user = `【チェック対象】\n${text}\n\n【参考：指導メモ・文字起こし】\n${note || '（なし）'}`;
+  const refLabel = kind === 'reply' ? '参考：保護者のメッセージ・カルテ・過去の報告' : '参考：指導メモ・文字起こし';
+  const user = `【チェック対象】\n${text}\n\n【${refLabel}】\n${note || '（なし）'}`;
   const raw = await callClaude(system, user, 'medium');
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('チェック結果を読み取れませんでした');
@@ -1993,6 +2036,11 @@ function openKarte(studentId) {
   if (from !== 'karte') karteReturn = from;
   karteStudentId = studentId;
   document.getElementById('karte-note-input').value = '';
+  if (replyState.studentId !== studentId) {
+    replyState = {studentId, parentMessage: '', variants: []};
+    document.getElementById('reply-parent-input').value = '';
+    renderReplyResults();
+  }
   hideAllScreens();
   document.getElementById('screen-karte').classList.add('active');
   renderKarte();
@@ -2029,6 +2077,19 @@ function renderKarte() {
       </div>`).join('')
     : `<div class="empty" style="padding:20px 16px;"><p style="font-size:13px;">まだメモがありません。<br>報告を作ると、文字起こしから好きなことや雑談を自動で拾って候補に出します。</p></div>`;
 
+  const msgs = messagesFor(s.id);
+  document.getElementById('karte-messages').innerHTML = msgs.length
+    ? msgs.map(m => `
+      <div class="msg-item">
+        <div class="note-item-main">
+          <div class="note-item-meta">${fmtYMD(m.createdAt)}${m.replyStyle ? ' · 返信（' + esc(m.replyStyle) + '）' : ''}</div>
+          <div class="msg-line"><span class="msg-who">保護者</span>${esc(m.parentMessage)}</div>
+          <div class="msg-line" style="margin-top:4px;"><span class="msg-who me">返信</span>${esc(m.replyBody)}</div>
+        </div>
+        <button class="icon-btn" style="font-size:16px;" onclick="deleteMessage('${m.id}')">🗑️</button>
+      </div>`).join('')
+    : `<div class="empty" style="padding:20px 16px;"><p style="font-size:13px;">まだやりとりの記録がありません</p></div>`;
+
   const reports = reportsFor(s.id);
   document.getElementById('karte-reports').innerHTML = reports.length
     ? reports.map(r => `
@@ -2040,6 +2101,184 @@ function renderKarte() {
 }
 
 function selectKarteCat(c) { karteCat = c; renderKarte(); }
+
+// ─── 保護者返信アシスト ───────────────────────────────────
+// やりとりは users/{uid}/messages に保存（reports とは別。月・週の送信判定には数えない）
+const REPLY_STYLES = [
+  {key: '丁寧',           desc: '丁寧で温かみのある、標準的な返信'},
+  {key: '簡潔',           desc: '要点だけを短く伝える返信（2〜4文程度）'},
+  {key: '相談に踏み込む', desc: '保護者の気持ちに寄り添い、状況を詳しく伺ったり、面談・電話などの相談を提案したりする返信'},
+];
+let replyState = {studentId: null, parentMessage: '', variants: []};
+let replySeq = 0;
+
+function messagesFor(studentId) { return messagesCache.filter(m => m.studentId === studentId); }
+
+function replyContext(student, parentMessage) {
+  const karte = karteContext(student);
+  const recent = messagesFor(student.id).slice(0, 3).map(m =>
+    `- ${fmtYMD(m.createdAt)} 保護者: ${(m.parentMessage || '').replace(/\s+/g, ' ').slice(0, 200)} / 返信: ${(m.replyBody || '').replace(/\s+/g, ' ').slice(0, 200)}`).join('\n');
+  return `【保護者からのメッセージ】\n${parentMessage}` +
+    (karte ? `\n\n【生徒カルテ】\n${karte}` : '') +
+    (recent ? `\n\n【これまでのやりとり】\n${recent}` : '');
+}
+
+async function generateReplies(student, parentMessage) {
+  const styles = getStyles();
+  const samples = LEVELS.includes(student.level)
+    ? ['class', 'pretest', 'test'].flatMap(t => ((styles[student.level] || {})[t] || []).map(sp => sp.text)).filter(Boolean).slice(0, 4)
+    : [];
+  const system = `あなたは塾講師が保護者からのLINEメッセージに返信する文面を考えるアシスタントです。
+ルール:
+- 保護者のメッセージに書かれた質問・相談・お礼に、もれなく答える。
+- 生徒カルテ・直近の報告・これまでのやりとりは参考情報として使い、そこにない事実（授業の様子・点数・予定など）を作らない。分からないことは「確認してご連絡します」などとする。
+- 日程変更・料金・成績の保証など、塾として約束できるか分からないことは断定しない。
+- 他の生徒の名前や比較は書かない。保護者を責める表現、不安をあおる表現は使わない。
+- 保護者は「${student.parentName ? student.parentName + '様' : '保護者様'}」、生徒は「${student.name}さん」と呼ぶ（呼び方は文体サンプルに合わせてよい）。
+- LINEで送るメッセージなので、件名や署名の定型文は不要。
+${samples.length ? '- 下の文体サンプルと同じ口調・言い回しで書く。' : '- 丁寧で温かみのある口調で書く。'}
+次の3パターンを作る:
+${REPLY_STYLES.map(r => `- ${r.key}: ${r.desc}`).join('\n')}
+出力は次のJSONのみ（コードブロック・前置きなし）:
+{"replies":[${REPLY_STYLES.map(r => `{"style":"${r.key}","text":"..."}`).join(',')}]}`
+    + (samples.length ? `\n\n【文体サンプル（この先生がふだん保護者に送っている文章）】\n${samples.join('\n\n---\n\n')}` : '');
+  const user = `生徒: ${student.name}（${gradeLabel(student)}）\n保護者: ${student.parentName || '未登録'}\n\n${replyContext(student, parentMessage)}`;
+  const raw = await callClaude(system, user, 'medium');
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('返信案を読み取れませんでした');
+  const parsed = JSON.parse(m[0]);
+  const list = Array.isArray(parsed.replies) ? parsed.replies : [];
+  return REPLY_STYLES.map(r => {
+    const hit = list.find(x => x && x.style === r.key);
+    return {style: r.key, text: hit && hit.text ? String(hit.text).trim() : ''};
+  }).filter(v => v.text);
+}
+
+async function onGenerateReplies() {
+  const s = getStudents().find(x => x.id === karteStudentId);
+  if (!s) return;
+  const parentMessage = document.getElementById('reply-parent-input').value.trim();
+  if (!parentMessage) { showToast('保護者からのメッセージを貼り付けてください'); return; }
+  if (!getApiKey()) { showToast('設定でAPIキーを登録してください'); showTab('settings'); return; }
+  const seq = ++replySeq;
+  const btn = document.getElementById('reply-gen-btn');
+  btn.disabled = true; btn.textContent = '⏳ 返信案を作成中...';
+  try {
+    const variants = await generateReplies(s, parentMessage);
+    if (seq !== replySeq || karteStudentId !== s.id) return;
+    if (!variants.length) throw new Error('返信案が空でした');
+    replyState = {studentId: s.id, parentMessage, variants: variants.map(v => ({...v, check: null, checkedText: ''}))};
+    renderReplyResults();
+    const note = replyContext(s, parentMessage);
+    await Promise.all(replyState.variants.map((v, i) => checkReply(i, note, seq)));
+  } catch (e) {
+    if (seq === replySeq) showToast('エラー: ' + (e.message || '返信案の作成に失敗しました'));
+  } finally {
+    if (seq === replySeq) { btn.disabled = false; btn.textContent = '✨ 返信案を3つ作る'; }
+  }
+}
+
+async function checkReply(i, note, seq) {
+  const v = replyState.variants[i];
+  const s = getStudents().find(x => x.id === replyState.studentId);
+  if (!v || !s) return;
+  const text = v.text;
+  v.checking = true;
+  renderReplyCheck(i);
+  const result = await checkText('reply', text, s, note || replyContext(s, replyState.parentMessage));
+  if (seq !== undefined && seq !== replySeq) return;
+  if (replyState.variants[i] !== v) return;
+  v.checking = false;
+  v.check = result;
+  v.checkedText = text;
+  renderReplyCheck(i);
+}
+
+function renderReplyResults() {
+  const el = document.getElementById('reply-results');
+  if (!el) return;
+  el.innerHTML = replyState.variants.map((v, i) => `
+    <div class="reply-card">
+      <div class="reply-style">${i + 1}. ${esc(v.style)}</div>
+      <textarea class="result-ta" id="reply-ta-${i}" rows="6" oninput="onReplyEdit(${i}, this.value)">${esc(v.text)}</textarea>
+      <div class="check-box" id="reply-check-${i}"></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="copyReply(${i})">📋 コピー</button>
+        <button class="btn btn-green" onclick="markReplySent(${i})">✓ この返信を送った</button>
+      </div>
+    </div>`).join('');
+  replyState.variants.forEach((v, i) => renderReplyCheck(i));
+}
+
+function renderReplyCheck(i) {
+  const v = replyState.variants[i];
+  const box = document.getElementById('reply-check-' + i);
+  if (!v || !box) return;
+  if (v.checking) { box.hidden = false; box.className = 'check-box loading'; box.textContent = '🛡️ ネガチェック中...'; return; }
+  if (!v.check) { box.className = 'check-box'; box.hidden = true; return; }
+  box.hidden = false;
+  if (v.checkedText !== v.text) {
+    box.className = 'check-box warn';
+    box.innerHTML = `<div class="check-head">✏️ 編集後はまだチェックしていません</div>
+      <div class="check-actions"><button class="btn btn-outline" onclick="checkReply(${i})">🔁 再チェック</button></div>`;
+    return;
+  }
+  box.className = checkBoxClass(v.check);
+  box.innerHTML = checkBoxInner('reply', v.check) + `<div class="check-actions">
+      ${v.check.revised ? `<button class="btn btn-green" onclick="applyReplyRevised(${i})">✏️ 修正版を反映</button>` : ''}
+      <button class="btn btn-outline" onclick="checkReply(${i})">🔁 再チェック</button>
+    </div>`;
+}
+
+function onReplyEdit(i, value) {
+  const v = replyState.variants[i];
+  if (!v) return;
+  const wasStale = v.checkedText !== v.text;
+  v.text = value;
+  if (!wasStale && v.check && !v.checking) renderReplyCheck(i);
+}
+
+function applyReplyRevised(i) {
+  const v = replyState.variants[i];
+  if (!v || !v.check || !v.check.revised) return;
+  v.text = v.check.revised;
+  document.getElementById('reply-ta-' + i).value = v.text;
+  showToast('修正版を反映しました');
+  checkReply(i);
+}
+
+function copyReply(i) {
+  const v = replyState.variants[i];
+  if (v && v.text) navigator.clipboard.writeText(v.text).then(() => showToast('コピーしました。LINEに貼り付けて送信してください'));
+}
+
+async function markReplySent(i) {
+  const v = replyState.variants[i];
+  const s = getStudents().find(x => x.id === replyState.studentId);
+  if (!v || !s || !v.text.trim()) return;
+  if (v.check && checkHasMust(v.check) && v.checkedText === v.text &&
+      !confirm('ネガチェックで「要修正」の指摘が残っています。このまま送信済みにしますか？')) return;
+  const { db, doc, setDoc } = window.fb;
+  await setDoc(doc(db, 'users', fbUser.uid, 'messages', uid()), {
+    studentId:     s.id,
+    studentName:   s.name,
+    parentMessage: replyState.parentMessage,
+    replyBody:     v.text.trim(),
+    replyStyle:    v.style,
+    createdAt:     new Date().toISOString()
+  });
+  replyState = {studentId: s.id, parentMessage: '', variants: []};
+  document.getElementById('reply-parent-input').value = '';
+  renderReplyResults();
+  showToast('やりとりを記録しました');
+}
+
+async function deleteMessage(id) {
+  if (!confirm('このやりとりの記録を削除しますか？')) return;
+  const { db, doc, deleteDoc } = window.fb;
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'messages', id));
+  showToast('削除しました');
+}
 
 async function saveNote(studentId, category, text, source, id) {
   const { db, doc, setDoc } = window.fb;
@@ -3260,7 +3499,7 @@ function renderSettings() {
       <div style="margin-top:12px;">${listHtml}</div>
       <div class="settings-group" style="margin-top:24px;">
         <label>データのバックアップ</label>
-        <div class="settings-hint" style="margin-bottom:10px;">生徒・送信履歴・文体サンプル・カルテメモをJSONファイルとして保存/復元できます。</div>
+        <div class="settings-hint" style="margin-bottom:10px;">生徒・送信履歴・文体サンプル・カルテメモ・保護者とのやりとり・下書きをJSONファイルとして保存/復元できます。</div>
         <div class="btn-row">
           <button class="btn btn-outline" onclick="exportBackup()">⬇️ エクスポート</button>
           <button class="btn btn-outline" onclick="document.getElementById('import-file-input').click()">⬆️ インポート</button>
