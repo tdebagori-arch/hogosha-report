@@ -97,6 +97,28 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .sc-days{font-size:11px;color:var(--gray);}
 .sc-days.long{color:var(--red);font-weight:700;}
 
+/* BATCH (まとめて作る) */
+.batch-opts{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--gray);}
+.batch-opts .chip-wrap{padding:0;}
+.batch-opts .chip{padding:5px 12px;}
+.batch-row{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:12px 16px;display:flex;flex-direction:column;gap:8px;}
+.batch-row-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.batch-row-hd .sc-name{font-size:15px;margin-right:2px;}
+.batch-kinds{display:flex;gap:6px;}
+.batch-kinds .chip{padding:5px 10px;font-size:12px;}
+.batch-row .note-input{font-size:13px;}
+.bstat{margin-left:auto;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--gray-l);color:var(--gray);white-space:nowrap;}
+.bstat.run{background:var(--blue-l);color:var(--blue-dk);}
+.bstat.done{background:var(--green-l);color:var(--green);}
+.bstat.failed{background:var(--red-l);color:var(--red);}
+.bstat.ready{background:var(--orange-l);color:var(--orange);}
+.bstat.run::before{content:'';display:inline-block;width:8px;height:8px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:4px;vertical-align:-1px;}
+.batch-msg{font-size:12px;line-height:1.5;color:var(--gray);}
+.batch-msg:empty{display:none;}
+.batch-msg.err{color:var(--red);}
+.batch-msg .btn{display:inline-block;width:auto;padding:6px 12px;font-size:12px;margin:6px 6px 0 0;}
+.sticky-foot{position:sticky;bottom:var(--nav-h);background:var(--white);border-top:1px solid var(--gray-bd);padding:10px 16px;z-index:40;}
+
 /* LEVEL TABS (home) */
 .level-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;overflow-x:auto;padding:0 8px;}
 .level-tab{flex:1;min-width:72px;border:none;background:none;padding:12px 6px 10px;font-size:14px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
@@ -452,6 +474,26 @@ body.logged-out .bottom-nav{display:none;}
   </div>
 </div>
 
+<!-- ── BATCH (まとめて作る) SCREEN ── -->
+<div id="screen-batch" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="goHome()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name">今週の報告をまとめて作る</div>
+      <div class="create-hd-sub" id="batch-sub"></div>
+    </div>
+  </div>
+  <div class="batch-opts">
+    <span>文章の長さ</span>
+    <div class="chip-wrap" id="batch-length-wrap"></div>
+    <span id="batch-blog-note"></span>
+  </div>
+  <div class="create-body" id="batch-list"></div>
+  <div class="sticky-foot">
+    <button class="btn btn-blue" id="batch-run-btn" onclick="runBatch()">✨ まとめて生成</button>
+  </div>
+</div>
+
 <!-- ── HISTORY SCREEN ── -->
 <div id="screen-history" class="screen">
   <div class="page-hd"><h1>送信履歴</h1></div>
@@ -596,7 +638,8 @@ window.dispatchEvent(new Event('fb-ready'));
 
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────
-const LEVELS = ['高校生', '中学生', '小学生'];
+const SCREENS = ['home','history','settings','create','type','karte','batch'];
+const LEVELS =['高校生', '中学生', '小学生'];
 const GRADE_COUNT = {'高校生': 3, '中学生': 3, '小学生': 6};
 const LEVEL_SHORT = {'高校生': '高', '中学生': '中', '小学生': '小'};
 
@@ -748,6 +791,7 @@ function rerenderCurrentScreen() {
   if (active.id === 'screen-history')  renderHistory();
   if (active.id === 'screen-settings') renderSettings();
   if (active.id === 'screen-karte')    renderKarte();
+  if (active.id === 'screen-batch')    refreshBatch();
 }
 
 function subscribeAll(uid) {
@@ -770,6 +814,10 @@ function subscribeAll(uid) {
       .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
     rerenderCurrentScreen();
   }));
+  fsUnsubs.push(onSnapshot(collection(db, 'users', uid, 'drafts'), snap => {
+    draftsCache = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    rerenderCurrentScreen();
+  }));
   fsUnsubs.push(onSnapshot(doc(db, 'users', uid, 'settings', 'main'), d => {
     settingsCache = d.exists() ? d.data() : {};
     rerenderCurrentScreen();
@@ -779,7 +827,7 @@ function subscribeAll(uid) {
 function unsubscribeAll() {
   fsUnsubs.forEach(u => u());
   fsUnsubs = [];
-  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {}; notesCache = [];
+  studentsCache = []; reportsCache = []; stylesCache = {}; settingsCache = {}; notesCache = []; draftsCache = [];
 }
 
 async function migrateLocalDataIfNeeded(uid) {
@@ -824,6 +872,7 @@ function exportBackup() {
     reports:  getReports(),
     styles:   getStyles(),
     notes:    notesCache,
+    drafts:   draftsCache,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
@@ -858,6 +907,10 @@ async function importBackup(input) {
       const { id, ...rest } = n;
       batch.set(doc(db, 'users', fbUser.uid, 'notes', id || uid()), rest);
     });
+    (data.drafts || []).forEach(d => {
+      const { id, ...rest } = d;
+      if (id) batch.set(doc(db, 'users', fbUser.uid, 'drafts', id), rest);
+    });
     const styles = data.styles || {};
     LEVELS.forEach(lv => ['class','pretest','test'].forEach(type =>
       ((styles[lv] || {})[type] || []).forEach(sp =>
@@ -875,7 +928,7 @@ async function importBackup(input) {
 
 function showLoginScreen() {
   document.body.classList.add('logged-out');
-  ['home','history','settings','create','type','karte'].forEach(t =>
+  SCREENS.forEach(t =>
     document.getElementById('screen-'+t).classList.remove('active')
   );
   document.getElementById('screen-login').classList.add('active');
@@ -933,6 +986,7 @@ let fbUser        = null;
 let studentsCache = [];
 let reportsCache  = [];
 let notesCache    = [];
+let draftsCache   = [];
 let stylesCache   = {};
 let settingsCache = {};
 let fsUnsubs      = [];
@@ -1040,6 +1094,8 @@ function isFullySentNow(student) {
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
+  // 下部に操作ボタンが固定されている画面では、ボタンに重ならない位置に出す
+  t.style.bottom = document.querySelector('.screen.active .sticky-foot') ? '150px' : '';
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2400);
 }
@@ -1058,7 +1114,7 @@ function esc(s) {
 // ─── NAVIGATION ──────────────────────────────────────────
 function hideAllScreens() {
   stopMic();
-  ['home','history','settings','create','type','karte'].forEach(t =>
+  SCREENS.forEach(t =>
     document.getElementById('screen-'+t).classList.remove('active')
   );
   ['home','history','settings'].forEach(t =>
@@ -1156,7 +1212,9 @@ function renderWeekPanel(allStudents) {
 }
 
 // ホームの「今週」ボタン（まとめて作る・確認・送信）
-function weekActionsHtml() { return ''; }
+function weekActionsHtml() {
+  return `<button class="btn btn-blue" onclick="openBatch()">📦 まとめて作る</button>`;
+}
 
 function renderHome() {
   const allStudents = getStudents();
@@ -1391,9 +1449,22 @@ function supportsRecording() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 }
 
-function toggleMic() {
+// 録音結果の書き込み先。既定は作成画面のメモ欄（まとめて作る画面では生徒ごとに切り替える）
+const DEFAULT_MIC_TARGET = {
+  btnId: 'mic-btn',
+  apply(text) {
+    const ta = document.getElementById('note-input');
+    const base = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
+    ta.value = base + text;
+  }
+};
+let micTarget = DEFAULT_MIC_TARGET;
+
+function toggleMic(target) {
   if (!supportsRecording()) { showToast('このブラウザは音声入力に対応していません'); return; }
-  if (micActive) stopMic(); else startMic();
+  if (micActive) { stopMic(); return; }
+  micTarget = target || DEFAULT_MIC_TARGET;
+  startMic();
 }
 
 async function startMic() {
@@ -1404,13 +1475,14 @@ async function startMic() {
     mediaRecorder = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
     audioChunks = [];
     mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
+    const target = micTarget;
     mediaRecorder.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
-      transcribeAudio(new Blob(audioChunks, {type: mediaRecorder.mimeType || 'audio/webm'}));
+      transcribeAudio(new Blob(audioChunks, {type: mediaRecorder.mimeType || 'audio/webm'}), target);
     };
     mediaRecorder.start();
     micActive = true;
-    const btn = document.getElementById('mic-btn');
+    const btn = document.getElementById(target.btnId);
     if (btn) btn.classList.add('recording');
   } catch (e) {
     showToast('マイクの使用が許可されていません');
@@ -1419,13 +1491,14 @@ async function startMic() {
 
 function stopMic() {
   micActive = false;
-  const btn = document.getElementById('mic-btn');
+  const btn = document.getElementById(micTarget.btnId);
   if (btn) btn.classList.remove('recording');
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
 }
 
-async function transcribeAudio(blob) {
-  const btn = document.getElementById('mic-btn');
+async function transcribeAudio(blob, target) {
+  target = target || DEFAULT_MIC_TARGET;
+  const btn = document.getElementById(target.btnId);
   if (btn) btn.disabled = true;
   showToast('文字起こし中...');
   try {
@@ -1444,9 +1517,7 @@ async function transcribeAudio(blob) {
       throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
     }
     const data = await resp.json();
-    const ta = document.getElementById('note-input');
-    const base = ta.value && !ta.value.endsWith('\n') ? ta.value + '\n' : ta.value;
-    ta.value = base + (data.text || '');
+    target.apply(data.text || '');
     showToast('文字起こし完了');
   } catch (e) {
     showToast('文字起こしエラー: ' + (e.message || '失敗しました'));
@@ -1663,8 +1734,8 @@ function getBlogSamples() {
   return (settingsCache.blogSamples || '').split(/\n-{3,}\n/).map(t => t.trim()).filter(Boolean);
 }
 
-async function generateBlog(student, reportText, note) {
-  const teacher = document.getElementById('blog-teacher').value || DEFAULT_BLOG_TEACHER;
+async function generateBlog(student, reportText, note, teacher) {
+  teacher = teacher || settingsCache.blogTeacher || DEFAULT_BLOG_TEACHER;
   const samples = getBlogSamples();
   const system = `あなたは個別指導塾「EIMEI」の講師ブログ「生徒自慢ブログ」の記事を書くアシスタントです。
 講師が日々の指導で見た生徒の頑張りを、塾のホームページで紹介する記事を書きます。読者は在籍生の保護者と、入塾を検討しているご家庭です。
@@ -1699,7 +1770,7 @@ async function generateBlogAndCheck(student, reportText, note, seq) {
   box.className = 'check-box loading';
   box.textContent = '✍️ ブログ記事を作成中...';
   try {
-    const blog = await generateBlog(student, reportText, note);
+    const blog = await generateBlog(student, reportText, note, document.getElementById('blog-teacher').value);
     if (seq !== genSeq) return;
     document.getElementById('blog-ta').value = blog;
   } catch (e) {
@@ -1795,38 +1866,54 @@ async function runCheck(kind, seq) {
   box.className = 'check-box loading';
   box.textContent = '🛡️ ネガチェック中...';
 
+  const result = await checkText(kind, text, student, note);
+  if (seq !== genSeq || ta.value.trim() !== text) return; // 途中で再生成・編集された
+
+  lastRevised[kind] = result.revised;
+  box.className = checkBoxClass(result);
+  box.innerHTML = checkBoxInner(kind, result) +
+    `<div class="check-actions">
+      ${result.revised ? `<button class="btn btn-green" onclick="applyRevised('${kind}')">✏️ 修正版を反映</button>` : ''}
+      <button class="btn btn-outline" onclick="runCheck('${kind}', genSeq)">🔁 再チェック</button>
+    </div>`;
+}
+
+// 画面に依存しないネガチェック本体。{issues, revised, aiError} を返す（失敗しても例外にしない）
+async function checkText(kind, text, student, note) {
   const local = localCheck(kind, text, student);
   let ai = {issues: [], revised: ''};
   let aiError = '';
   try { ai = await aiCheck(kind, text, student, note); }
   catch (e) { aiError = e.message || 'チェックに失敗しました'; }
-  if (seq !== genSeq || ta.value.trim() !== text) return; // 途中で再生成・編集された
+  return {issues: [...local, ...ai.issues], revised: ai.revised, aiError};
+}
 
-  const issues = [...local, ...ai.issues];
-  lastRevised[kind] = ai.revised;
-  const hasMust = issues.some(i => i.level === '要修正');
-  const title = kind === 'report' ? '報告文' : 'ブログ記事';
+function checkHasMust(result) {
+  return !!result && (result.issues || []).some(i => i.level === '要修正');
+}
 
-  if (aiError) {
-    box.className = 'check-box warn';
-  } else {
-    box.className = 'check-box ' + (!issues.length ? 'ok' : hasMust ? 'bad' : 'warn');
-  }
-  const head = aiError
-    ? `⚠️ AIチェックに失敗しました（${esc(aiError)}）。目視で確認してください`
+function checkBoxClass(result) {
+  const issues = result.issues || [];
+  if (result.aiError) return 'check-box warn';
+  return 'check-box ' + (!issues.length ? 'ok' : checkHasMust(result) ? 'bad' : 'warn');
+}
+
+const CHECK_TITLE = {report: '報告文', blog: 'ブログ記事', reply: '返信文'};
+
+function checkBoxInner(kind, result) {
+  const issues = result.issues || [];
+  const title = CHECK_TITLE[kind] || '文章';
+  const head = result.aiError
+    ? `⚠️ AIチェックに失敗しました（${esc(result.aiError)}）。目視で確認してください`
     : !issues.length ? `✅ ${title}：ネガチェックOK` : `🛡️ ${title}：${issues.length}件の指摘`;
-  box.innerHTML = `<div class="check-head">${head}</div>` +
+  return `<div class="check-head">${head}</div>` +
     issues.map(i => `
       <div class="check-issue">
         <span class="check-tag${i.level === '要修正' ? ' must' : ''}">${esc(i.level || '注意')}</span>
         <span class="check-quote">「${esc(i.quote || '')}」</span>
         <div>${esc(i.reason || '')}</div>
         ${i.suggestion ? `<div class="check-sugg">→ ${esc(i.suggestion)}</div>` : ''}
-      </div>`).join('') +
-    `<div class="check-actions">
-      ${ai.revised ? `<button class="btn btn-green" onclick="applyRevised('${kind}')">✏️ 修正版を反映</button>` : ''}
-      <button class="btn btn-outline" onclick="runCheck('${kind}', genSeq)">🔁 再チェック</button>
-    </div>`;
+      </div>`).join('');
 }
 
 // ─── 生徒カルテ ───────────────────────────────────────────
@@ -1957,6 +2044,22 @@ async function extractKarteCands(student, note, seq) {
   box.hidden = false;
   box.className = 'check-box karte-box loading';
   box.textContent = '📒 文字起こしからカルテに残す話題を探しています...';
+  try {
+    const cands = await fetchKarteCands(student, note);
+    if (seq !== genSeq) return;
+    karteCands = cands;
+  } catch (e) {
+    if (seq !== genSeq) return;
+    box.className = 'check-box warn';
+    box.textContent = 'カルテ候補の抽出に失敗しました: ' + (e.message || '');
+    return;
+  }
+  renderKarteCands();
+}
+
+// 画面に依存しないカルテ候補の抽出本体。[{category, text, checked, saved}] を返す
+async function fetchKarteCands(student, note) {
+  if (!note || note.length < 20) return [];
   const existing = notesFor(student.id).slice(0, 30).map(n => `- ${n.text}`).join('\n') || '（なし）';
   const system = `あなたは塾講師のアシスタントです。指導中の会話の文字起こしから、この生徒について今後の会話や報告に役立つ情報を抜き出して「生徒カルテ」に残します。
 抜き出す対象:
@@ -1972,22 +2075,13 @@ async function extractKarteCands(student, note, seq) {
 出力は次のJSONのみ（コードブロック・前置きなし）:
 {"notes":[{"category":"好きなこと|雑談|家庭・部活|学習","text":"..."}]}`;
   const user = `生徒: ${student.name}（${gradeLabel(student)}）\n\n【既存のカルテメモ】\n${existing}\n\n【今回の文字起こし】\n${note}`;
-  try {
-    const raw = await callClaude(system, user, 'low');
-    if (seq !== genSeq) return;
-    const m = raw.match(/\{[\s\S]*\}/);
-    const parsed = m ? JSON.parse(m[0]) : {notes: []};
-    karteCands = (parsed.notes || []).filter(n => n && n.text).map(n => ({
-      category: NOTE_CATS.includes(n.category) ? n.category : 'その他',
-      text: String(n.text).trim(), checked: true, saved: false
-    }));
-  } catch (e) {
-    if (seq !== genSeq) return;
-    box.className = 'check-box warn';
-    box.textContent = 'カルテ候補の抽出に失敗しました: ' + (e.message || '');
-    return;
-  }
-  renderKarteCands();
+  const raw = await callClaude(system, user, 'low');
+  const m = raw.match(/\{[\s\S]*\}/);
+  const parsed = m ? JSON.parse(m[0]) : {notes: []};
+  return (parsed.notes || []).filter(n => n && n.text).map(n => ({
+    category: NOTE_CATS.includes(n.category) ? n.category : 'その他',
+    text: String(n.text).trim(), checked: true, saved: false
+  }));
 }
 
 function renderKarteCands() {
@@ -2058,7 +2152,8 @@ async function onMarkSent() {
 }
 
 // ─── AI GENERATION ────────────────────────────────────────
-async function generateReport(student, reportType, evalType, chips, note, length) {
+// strictMaterial: まとめて生成用。今回の素材にない出来事をカルテや過去の報告から作らせない
+async function generateReport(student, reportType, evalType, chips, note, length, strictMaterial) {
   const apiKey = getApiKey();
   const styles = getStyles();
   const samples = ((styles[student.level] || {})[reportType] || []).map(sp => sp.text).filter(Boolean);
@@ -2076,6 +2171,7 @@ async function generateReport(student, reportType, evalType, chips, note, length
     : 'あなたは保護者への連絡文を書くアシスタントです。丁寧で温かみのある文体で連絡文を生成してください。出力は連絡文のみ（前置き・説明なし）。'
   ) + (extraInstruction ? `\n\n${extraInstruction}` : '')
     + `\n\n「生徒カルテ」が渡された場合は参考情報として使ってください。前回の報告からの変化に触れたり、好きなことの話題に自然に一言触れたりする程度にとどめ、無理に使ったりメモを羅列したりしないでください。今回のメモと矛盾する場合は今回のメモを優先してください。`
+    + (strictMaterial ? `\n\n今回の授業の出来事（教科・内容・点数・様子）は「追加メモ」に書かれていることだけを書いてください。追加メモにない出来事を、生徒カルテや過去の報告から推測して書かないでください。` : '')
     + `\n\n文章の長さ: ${lengthOpt.desc}`;
   const karte = karteContext(student);
 
@@ -2094,6 +2190,359 @@ ${karte ? `\n【生徒カルテ（参考）】\n${karte}\n` : ''}
 
   return callClaude(systemPrompt, userPrompt, 'medium');
 }
+
+// ─── まとめて作る（今週の通常授業）──────────────────────────
+// 下書きは users/{uid}/drafts/{週キー}_{生徒ID}。素材・生成結果・確認状態・送信状態を持つ
+const DRAFT_STATUS_LABEL = {queued:'待機中', transcribing:'文字起こし中', generating:'生成中', checking:'チェック中', done:'完了', failed:'失敗', interrupted:'中断'};
+const RUNNING_STATUSES = ['queued', 'transcribing', 'generating', 'checking'];
+const BATCH_CONCURRENCY = 3;
+const MATERIAL_KINDS = [
+  {key:'text',  label:'📝 メモ'},
+  {key:'voice', label:'🎤 音声'},
+  {key:'video', label:'🎬 動画'},
+];
+let batchRunning    = new Set(); // この画面で処理中の下書きID
+let batchMaterials  = {};        // studentId -> 入力中の素材 {kind, text, videoUrl}
+let batchSaveTimers = {};
+let batchSavePending = {};
+let batchListKey    = '';
+let batchLength = (() => { try { return localStorage.getItem('pr_batch_length') || 'normal'; } catch { return 'normal'; } })();
+
+function draftId(studentId) { return `${currentWeekKey()}_${studentId}`; }
+function draftOf(studentId) { return draftsCache.find(d => d.id === draftId(studentId)); }
+
+function saveDraft(id, obj) {
+  const local = draftsCache.find(d => d.id === id);
+  if (local) Object.assign(local, obj); else draftsCache.push({id, ...obj});
+  const { db, doc, setDoc } = window.fb;
+  return setDoc(doc(db, 'users', fbUser.uid, 'drafts', id), {...obj, updatedAt: new Date().toISOString()}, {merge: true});
+}
+
+// 前の画面を閉じても処理中のままになっている下書きは「中断」として扱う
+function draftStatus(d) {
+  if (!d || !d.status) return '';
+  if (RUNNING_STATUSES.includes(d.status) && !batchRunning.has(d.id)) return 'interrupted';
+  return d.status;
+}
+
+function materialOf(studentId) {
+  if (batchMaterials[studentId]) return batchMaterials[studentId];
+  const d = draftOf(studentId);
+  return {kind: 'text', text: '', videoUrl: '', ...((d && d.material) || {})};
+}
+
+function hasMaterial(m) {
+  return m.kind === 'video' ? isVideoUrl((m.videoUrl || '').trim()) : !!(m.text || '').trim();
+}
+
+// 今週まだ通常授業の報告を送っていない生徒（ホームと同じ並び）
+function batchStudents() {
+  return getStudents().filter(s => !isClassSentThisWeek(s.id)).sort((a, b) => {
+    const ad = daysSinceClassSent(a.id), bd = daysSinceClassSent(b.id);
+    const av = ad === null ? Infinity : ad, bv = bd === null ? Infinity : bd;
+    return (bv - av) || compareStudents(a, b);
+  });
+}
+
+function batchNeedsRun(studentId) {
+  const st = draftStatus(draftOf(studentId));
+  return !st || st === 'failed' || st === 'interrupted';
+}
+
+let batchMaterialsWeek = '';
+
+function openBatch() {
+  if (batchMaterialsWeek !== currentWeekKey()) { batchMaterials = {}; batchMaterialsWeek = currentWeekKey(); }
+  hideAllScreens();
+  document.getElementById('screen-batch').classList.add('active');
+  renderBatch();
+  window.scrollTo(0, 0);
+}
+
+function renderBatch() {
+  const students = batchStudents();
+  batchListKey = students.map(s => s.id).join(',');
+  document.getElementById('batch-length-wrap').innerHTML = LENGTH_OPTIONS.map(o =>
+    `<div class="chip${o.key === batchLength ? ' sel' : ''}" onclick="selectBatchLength('${o.key}')">${o.label}</div>`).join('');
+  document.getElementById('batch-blog-note').textContent =
+    settingsCache.blogEnabled !== false ? '· ブログ記事も作ります' : '· ブログ記事は作りません（作成画面のStep 5で切替）';
+  const el = document.getElementById('batch-list');
+  if (!students.length) {
+    el.innerHTML = `<div class="empty"><div class="big">🎉</div><p>今週の通常授業の報告は、全員送信済みです。</p></div>`;
+    updateBatchSummary();
+    return;
+  }
+  el.innerHTML = `<div class="settings-hint" style="padding:10px 16px 0;">生徒ごとに素材を1つ入れてください。素材が入っている生徒だけ生成します（入力は自動で保存されます）。</div>` +
+    students.map(s => `
+    <div class="batch-row" id="brow-${s.id}">
+      <div class="batch-row-hd">
+        <span class="sc-name">${esc(s.name)}</span>
+        <span class="badge badge-${s.level}">${gradeLabel(s)}</span>
+        ${daysSinceLabel(s.id)}
+        <span class="bstat" id="bstat-${s.id}"></span>
+      </div>
+      <div class="batch-kinds" id="bkinds-${s.id}"></div>
+      <div id="bmat-${s.id}"></div>
+      <div class="batch-msg" id="bmsg-${s.id}"></div>
+    </div>`).join('');
+  students.forEach(s => renderBatchMaterial(s.id));
+  updateBatchSummary();
+}
+
+function renderBatchMaterial(sid) {
+  const m = materialOf(sid);
+  document.getElementById('bkinds-' + sid).innerHTML = MATERIAL_KINDS.map(k =>
+    `<div class="chip${k.key === m.kind ? ' sel' : ''}" onclick="setBatchKind('${sid}','${k.key}')">${k.label}</div>`).join('');
+  const box = document.getElementById('bmat-' + sid);
+  if (m.kind === 'video') {
+    box.innerHTML = `<input class="settings-input" type="url" inputmode="url" placeholder="🎬 動画のURL（YouTube）を貼り付け" value="${esc(m.videoUrl)}" oninput="onBatchInput('${sid}','videoUrl',this.value)">`;
+  } else {
+    const mic = m.kind === 'voice'
+      ? `<button type="button" class="mic-btn" id="bmic-${sid}" onclick="toggleMic(batchMicTarget('${sid}'))" title="録音して文字にする">🎤</button>` : '';
+    const ph = m.kind === 'voice' ? '🎤を押して話す → もう一度押すと文字になります（直接入力・修正も可）' : '例: 数学の方程式。計算が速くなってきた。部活の大会の話をしていた。';
+    box.innerHTML = `<div class="note-row"><textarea class="note-input" id="btext-${sid}" rows="2" placeholder="${ph}" oninput="onBatchInput('${sid}','text',this.value)">${esc(m.text)}</textarea>${mic}</div>`;
+  }
+  updateBatchRow(sid);
+}
+
+function batchMicTarget(sid) {
+  return {
+    btnId: 'bmic-' + sid,
+    apply(text) {
+      const m = {...materialOf(sid)};
+      m.text = (m.text && !m.text.endsWith('\n') ? m.text + '\n' : (m.text || '')) + text;
+      batchMaterials[sid] = m;
+      const ta = document.getElementById('btext-' + sid);
+      if (ta) ta.value = m.text;
+      scheduleSaveMaterial(sid, 0);
+      updateBatchRow(sid);
+      updateBatchSummary();
+    }
+  };
+}
+
+function setBatchKind(sid, kind) {
+  batchMaterials[sid] = {...materialOf(sid), kind};
+  scheduleSaveMaterial(sid, 0);
+  renderBatchMaterial(sid);
+  updateBatchSummary();
+}
+
+function onBatchInput(sid, field, value) {
+  batchMaterials[sid] = {...materialOf(sid), [field]: value};
+  scheduleSaveMaterial(sid, 700);
+  updateBatchRow(sid);
+  updateBatchSummary();
+}
+
+function scheduleSaveMaterial(sid, delay) {
+  clearTimeout(batchSaveTimers[sid]);
+  batchSavePending[sid] = true;
+  batchSaveTimers[sid] = setTimeout(() => saveMaterialNow(sid), delay);
+}
+
+function saveMaterialNow(sid) {
+  clearTimeout(batchSaveTimers[sid]);
+  if (!batchSavePending[sid]) return Promise.resolve();
+  delete batchSavePending[sid];
+  const m = materialOf(sid);
+  return saveDraft(draftId(sid), {
+    studentId: sid, weekKey: currentWeekKey(), reportType: 'class',
+    material: {kind: m.kind, text: m.text || '', videoUrl: (m.videoUrl || '').trim()}
+  });
+}
+
+function selectBatchLength(key) {
+  batchLength = key;
+  try { localStorage.setItem('pr_batch_length', key); } catch {}
+  renderBatch();
+}
+
+function updateBatchRow(sid) {
+  const statEl = document.getElementById('bstat-' + sid);
+  const msgEl  = document.getElementById('bmsg-' + sid);
+  if (!statEl) return;
+  const d  = draftOf(sid);
+  const st = draftStatus(d);
+  const ready = hasMaterial(materialOf(sid));
+  let cls = '', label = '', msg = '', err = false;
+  if (st === 'done') {
+    cls = 'done';
+    label = d.sentAt ? '送信済' : d.review === 'ok' ? '確認済' : '完了';
+    msg = d.sentAt ? '' : d.review === 'ok' ? '確認済み · 送信待ち' : '確認待ち';
+    msg += ` <button class="btn btn-outline" onclick="retryBatch('${sid}')">🔁 素材から作り直す</button>`;
+  } else if (st === 'failed' || st === 'interrupted') {
+    cls = 'failed'; err = true;
+    label = DRAFT_STATUS_LABEL[st];
+    msg = '⚠️ ' + esc(st === 'interrupted' ? '前回の処理が途中で止まりました' : (d.error || '失敗しました')) +
+      `<br><button class="btn btn-outline" onclick="retryBatch('${sid}')">🔁 再実行</button>` +
+      (d.errorCode === 'nocaption' ? `<button class="btn btn-outline" onclick="retryBatch('${sid}', true)">🎙 AIで音声から文字起こしして再実行（クレジット消費）</button>` : '');
+  } else if (st) {
+    cls = 'run'; label = DRAFT_STATUS_LABEL[st];
+  } else {
+    cls = ready ? 'ready' : ''; label = ready ? '素材あり' : '素材なし';
+  }
+  statEl.className = 'bstat' + (cls ? ' ' + cls : '');
+  statEl.textContent = label;
+  msgEl.className = 'batch-msg' + (err ? ' err' : '');
+  msgEl.innerHTML = msg;
+}
+
+function updateBatchSummary() {
+  const students = batchStudents();
+  const ready = students.filter(s => hasMaterial(materialOf(s.id)));
+  const todo  = ready.filter(s => batchNeedsRun(s.id));
+  const done  = students.filter(s => draftStatus(draftOf(s.id)) === 'done').length;
+  const running = students.filter(s => batchRunning.has(draftId(s.id))).length;
+  document.getElementById('batch-sub').textContent =
+    `今週まだ ${students.length}人 · 素材あり ${ready.length}人 · 生成済 ${done}人`;
+  const btn = document.getElementById('batch-run-btn');
+  btn.disabled = !todo.length || running > 0;
+  btn.textContent = running ? `⏳ 生成中…（残り ${running}人）`
+    : todo.length ? `✨ 素材のある ${todo.length}人分をまとめて生成` : '✨ まとめて生成（素材を入れてください）';
+}
+
+// Firestore の更新が来たとき。入力中の欄は作り直さず、状態表示だけ更新する
+function refreshBatch() {
+  const key = batchStudents().map(s => s.id).join(',');
+  const typing = document.activeElement && document.getElementById('batch-list').contains(document.activeElement);
+  if (key !== batchListKey && !typing) { renderBatch(); return; }
+  batchStudents().forEach(s => updateBatchRow(s.id));
+  updateBatchSummary();
+}
+
+async function runBatch() {
+  if (!getApiKey()) { showToast('設定でAPIキーを登録してください'); showTab('settings'); return; }
+  const targets = batchStudents().filter(s => hasMaterial(materialOf(s.id)) && batchNeedsRun(s.id));
+  if (!targets.length) { showToast('素材が入っている未生成の生徒がいません'); return; }
+  if (targets.some(s => materialOf(s.id).kind === 'video') && !getSupadataKey()) {
+    showToast('動画の文字起こし用APIキー（Supadata）を設定してください'); return;
+  }
+  await Promise.all(targets.map(s => { batchSavePending[s.id] = true; return saveMaterialNow(s.id); }));
+  targets.forEach(s => {
+    batchRunning.add(draftId(s.id));
+    saveDraft(draftId(s.id), {status: 'queued', error: '', errorCode: ''});
+  });
+  refreshBatch();
+  await runPool(targets, BATCH_CONCURRENCY, s => processDraft(s.id));
+  const ds = targets.map(s => draftOf(s.id));
+  const ok = ds.filter(d => d && d.status === 'done').length;
+  showToast(`まとめて生成が終わりました（完了 ${ok}人${ok < ds.length ? `・失敗 ${ds.length - ok}人` : ''}）`);
+}
+
+async function retryBatch(sid, allowGenerate) {
+  const id = draftId(sid);
+  if (batchRunning.has(id)) return;
+  if (!hasMaterial(materialOf(sid))) { showToast('素材を入れてください'); return; }
+  if (allowGenerate && !confirm('AIで動画の音声から文字起こしします。\n（動画1分あたり2クレジット消費。30分の動画で約60クレジット）')) return;
+  batchSavePending[sid] = true;
+  await saveMaterialNow(sid);
+  batchRunning.add(id);
+  saveDraft(id, {status: 'queued', error: '', errorCode: ''});
+  refreshBatch();
+  await processDraft(sid, {allowGenerate});
+}
+
+// items を最大 n 件ずつ並行で処理する。1件の失敗はほかに影響しない（fn 側で例外を処理する）
+async function runPool(items, n, fn) {
+  let next = 0;
+  const worker = async () => { while (next < items.length) await fn(items[next++]); };
+  await Promise.all(Array.from({length: Math.min(n, items.length)}, worker));
+}
+
+// 1人分：文字起こし → 評価・ポイント選択 → 報告文 → ネガチェック・カルテ候補・ブログ（＋チェック）
+async function processDraft(studentId, opts = {}) {
+  const id = draftId(studentId);
+  const set = obj => { const p = saveDraft(id, obj); if (document.getElementById('screen-batch').classList.contains('active')) refreshBatch(); return p; };
+  batchRunning.add(id);
+  try {
+    const student = getStudents().find(x => x.id === studentId);
+    if (!student) throw new Error('生徒が見つかりません');
+    const mat = materialOf(studentId);
+    let note = '';
+    if (mat.kind === 'video') {
+      const url = (mat.videoUrl || '').trim();
+      const d = draftOf(studentId) || {};
+      if (d.transcript && d.transcriptUrl === url) {
+        note = d.transcript; // 再実行では文字起こしをやり直さない（クレジット節約）
+      } else {
+        await set({status: 'transcribing'});
+        try {
+          note = await fetchVideoTranscript(url, 'native');
+        } catch (e) {
+          if (!e.noTranscript) throw e;
+          if (!opts.allowGenerate) {
+            const err = new Error('この動画にはまだ字幕がありません。YouTubeの自動字幕ができてから再実行するか、AIで文字起こしできます');
+            err.code = 'nocaption';
+            throw err;
+          }
+          note = await fetchVideoTranscript(url, 'generate');
+        }
+        await set({transcript: note, transcriptUrl: url});
+      }
+    } else {
+      note = (mat.text || '').trim();
+    }
+    // 素材がない生徒の報告は絶対に作らない（カルテだけから事実を作らせない）
+    if (!note.trim()) throw new Error('素材が空のため生成しませんでした');
+
+    await set({status: 'generating'});
+    const picked = await pickEvalAndChips(student, note);
+    const body = await generateReport(student, 'class', picked.evalLabel, picked.chips, note, batchLength, true);
+
+    await set({status: 'checking'});
+    const wantBlog = settingsCache.blogEnabled !== false;
+    const [reportCheck, karte, blog] = await Promise.all([
+      checkText('report', body, student, note),
+      fetchKarteCands(student, note).then(c => ({cands: c, error: ''}), e => ({cands: [], error: e.message || '失敗しました'})),
+      wantBlog
+        ? generateBlog(student, body, note).then(
+            async b => ({body: b, check: await checkText('blog', b, student, note), error: ''}),
+            e => ({body: '', check: null, error: e.message || '失敗しました'}))
+        : Promise.resolve({body: '', check: null, error: ''}),
+    ]);
+    await set({
+      status: 'done', error: '', errorCode: '',
+      note, evalLabel: picked.evalLabel, chips: picked.chips, length: batchLength,
+      body, reportCheck,
+      blogBody: blog.body, blogCheck: blog.check, blogError: blog.error, blogDone: false,
+      karteCands: karte.cands.map(c => ({category: c.category, text: c.text, checked: true})), karteError: karte.error,
+      review: 'pending', generatedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    await set({status: 'failed', error: e.message || '失敗しました', errorCode: e.code || ''});
+  } finally {
+    batchRunning.delete(id);
+    if (document.getElementById('screen-batch').classList.contains('active')) refreshBatch();
+  }
+}
+
+// 素材から「全体評価」と「具体的なポイント」をAIに選ばせる（あとで確認画面で変えられる）
+function evalLabelOf(e) { return `${e.emoji} ${e.label.replace('\n', '')}`; }
+
+async function pickEvalAndChips(student, note) {
+  const chips = getChipsFor(student.level, 'class');
+  const evalLabels = EVALS.map(evalLabelOf);
+  const system = `あなたは塾講師のアシスタントです。授業メモ・文字起こしを読み、保護者への報告に使う「全体評価」と「具体的なポイント」を候補から選びます。
+ルール:
+- 全体評価は候補から1つだけ選ぶ。判断できなければ「💬 その他」。
+- 具体的なポイントは、メモに根拠があるものだけを候補から0〜4個選ぶ。根拠のない項目、特に欠席・遅刻・不安定などネガティブな項目は、メモにはっきり書かれていない限り選ばない。
+- 候補の文言をそのまま使う。
+出力は次のJSONのみ（コードブロック・前置きなし）:
+{"eval":"全体評価の文言","chips":["..."]}`;
+  const user = `【全体評価の候補】\n${evalLabels.join('\n')}\n\n【具体的なポイントの候補】\n${chips.join('\n')}\n\n【授業メモ・文字起こし】\n${note}`;
+  const raw = await callClaude(system, user, 'low');
+  let parsed = {};
+  try { const m = raw.match(/\{[\s\S]*\}/); parsed = m ? JSON.parse(m[0]) : {}; } catch {}
+  return {
+    evalLabel: evalLabels.includes(parsed.eval) ? parsed.eval : evalLabels[evalLabels.length - 1],
+    chips: (Array.isArray(parsed.chips) ? parsed.chips : []).filter(c => chips.includes(c)),
+  };
+}
+
+window.addEventListener('beforeunload', e => {
+  if (batchRunning.size) { e.preventDefault(); e.returnValue = ''; }
+});
 
 // ─── HISTORY ─────────────────────────────────────────────
 function renderHistory() {
