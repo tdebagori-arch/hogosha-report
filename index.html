@@ -529,6 +529,19 @@ body.logged-out .bottom-nav{display:none;}
   <div class="sticky-foot" id="review-foot"></div>
 </div>
 
+<!-- ── SEND QUEUE SCREEN ── -->
+<div id="screen-send" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="goHome()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name">送信キュー</div>
+      <div class="create-hd-sub" id="send-sub"></div>
+    </div>
+  </div>
+  <div class="create-body" id="send-body"></div>
+  <div class="sticky-foot" id="send-foot"></div>
+</div>
+
 <!-- ── HISTORY SCREEN ── -->
 <div id="screen-history" class="screen">
   <div class="page-hd"><h1>送信履歴</h1></div>
@@ -673,7 +686,7 @@ window.dispatchEvent(new Event('fb-ready'));
 
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────
-const SCREENS = ['home','history','settings','create','type','karte','batch','review'];
+const SCREENS = ['home','history','settings','create','type','karte','batch','review','send'];
 const LEVELS =['高校生', '中学生', '小学生'];
 const GRADE_COUNT = {'高校生': 3, '中学生': 3, '小学生': 6};
 const LEVEL_SHORT = {'高校生': '高', '中学生': '中', '小学生': '小'};
@@ -828,6 +841,7 @@ function rerenderCurrentScreen() {
   if (active.id === 'screen-karte')    renderKarte();
   if (active.id === 'screen-batch')    refreshBatch();
   if (active.id === 'screen-review')   refreshReview();
+  if (active.id === 'screen-send')     refreshSend();
 }
 
 function subscribeAll(uid) {
@@ -1250,8 +1264,11 @@ function renderWeekPanel(allStudents) {
 // ホームの「今週」ボタン（まとめて作る・確認・送信）
 function weekActionsHtml() {
   const toReview = reviewQueue().length;
+  const toSend   = sendQueue().length;
+  const blogs    = blogQueue().length;
   return `<button class="btn btn-blue" onclick="openBatch()">📦 まとめて作る</button>` +
-    `<button class="btn ${toReview ? 'btn-green' : 'btn-outline'}" onclick="openReview()">✅ 確認 ${toReview}件</button>`;
+    `<button class="btn ${toReview ? 'btn-green' : 'btn-outline'}" onclick="openReview()">✅ 確認 ${toReview}件</button>` +
+    `<button class="btn ${toSend ? 'btn-green' : 'btn-outline'}" onclick="openSend()">📤 送信 ${toSend}件${blogs ? `<br><span style="font-size:10px;font-weight:600;">ブログ ${blogs}件</span>` : ''}</button>`;
 }
 
 function renderHome() {
@@ -2879,6 +2896,173 @@ async function unskipAll() {
   await Promise.all(skippedDrafts().map(d => saveDraft(d.id, {review: 'pending'})));
   reviewDoneCount = 0;
   renderReview();
+}
+
+// ─── 送信キュー ───────────────────────────────────────────
+const BLOG_POST_URL = 'https://meiseikobetsu.jp/blog-post.php';
+let sendCurrentId = null;
+let sendLaterIds  = [];   // 「あとで」にした下書き（この画面を開いている間だけ後ろに回す）
+let sendBusy      = false;
+
+function sendQueue() {
+  const q = sortDrafts(draftsCache.filter(d => d.status === 'done' && d.review === 'ok' && !d.sentAt
+    && getStudents().some(s => s.id === d.studentId)));
+  return [...q.filter(d => !sendLaterIds.includes(d.id)), ...sendLaterIds.map(id => q.find(d => d.id === id)).filter(Boolean)];
+}
+
+// 確認済み（送信前・送信後どちらも）で、まだ投稿済みにしていないブログ
+function blogQueue() {
+  return sortDrafts(draftsCache.filter(d => d.status === 'done' && d.review === 'ok' && d.blogBody && !d.blogDone));
+}
+
+function openSend() {
+  sendCurrentId = null;
+  sendLaterIds = [];
+  hideAllScreens();
+  document.getElementById('screen-send').classList.add('active');
+  renderSend();
+  window.scrollTo(0, 0);
+}
+
+function refreshSend() { if (!sendBusy) renderSend(); }
+
+function renderSend() {
+  const q = sendQueue();
+  if (!q.some(d => d.id === sendCurrentId)) sendCurrentId = q.length ? q[0].id : null;
+  const d = q.find(x => x.id === sendCurrentId);
+  const blogs = blogQueue();
+  document.getElementById('send-sub').textContent = `送信待ち ${q.length}件 · ブログ ${blogs.length}件`;
+  const body = document.getElementById('send-body');
+  const foot = document.getElementById('send-foot');
+  let html = '';
+  if (d) {
+    const s = getStudents().find(x => x.id === d.studentId);
+    const cands = (d.karteCands || []).filter(c => c.checked);
+    html += `
+    <div class="q-sec">
+      <div class="q-name">${esc(s.name)} <span class="badge badge-${s.level}">${gradeLabel(s)}</span></div>
+      <div class="q-meta">${s.parentName ? '保護者: ' + esc(s.parentName) : '保護者名 未登録'}</div>
+      ${isClassSentThisWeek(s.id) ? `<div class="q-warn">この生徒には今週すでに通常授業の報告を送っています</div>` : ''}
+      <div class="result-label">報告文（LINEに貼り付ける内容）</div>
+      <div class="send-body" style="max-height:none;">${esc(d.body)}</div>
+      ${cands.length ? `<div class="settings-hint">「送った」を押すと、カルテに ${cands.length}件 保存します：${cands.map(c => esc(c.text)).join(' / ')}</div>` : ''}
+    </div>`;
+    foot.innerHTML = `
+      <div class="q-progress">${q.length}件のうち 1件目 · コピー → LINEに貼って送信 → 「送った」</div>
+      <div class="q-foot-row">
+        <button class="btn btn-outline" onclick="sendLater()" ${q.length > 1 ? '' : 'disabled'}>⏭ あとで</button>
+        <button class="btn btn-outline" onclick="sendBackToReview()">↩ 確認に戻す</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-blue" id="send-copy-btn" onclick="sendCopy()">📋 報告文をコピー</button>
+        <button class="btn btn-green" id="send-done-btn" onclick="sendDone()">✓ 送った</button>
+      </div>`;
+  } else {
+    html += `<div class="empty" style="padding:32px 24px;"><div class="big">📤</div><p>送信待ちの報告はありません。</p></div>`;
+    foot.innerHTML = `<button class="btn btn-outline" onclick="goHome()">ホームに戻る</button>`;
+  }
+  html += `
+    <div class="q-sec">
+      <div class="result-label">褒めブログ（${blogs.length}件）</div>
+      ${blogs.length ? '' : '<div class="settings-hint">投稿待ちのブログはありません。</div>'}
+    </div>` +
+    blogs.map(b => {
+      const s = getStudents().find(x => x.id === b.studentId);
+      const title = (b.blogBody.match(/タイトル[：:]\s*(.+)/) || [])[1] || b.blogBody.split('\n')[0];
+      return `<div class="send-item">
+        <div class="hi-meta">${s ? esc(s.name) + ' の報告から' : ''}${b.sentAt ? ' · 報告送信済' : ' · 報告まだ'}</div>
+        <div class="hi-name">${esc(title)}</div>
+        <div class="send-body">${esc(b.blogBody)}</div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="copyDraftBlog('${b.id}')">📋 ブログをコピー</button>
+          <a class="btn btn-blue" href="${BLOG_POST_URL}" target="_blank" rel="noopener" style="text-decoration:none;">📝 投稿画面を開く</a>
+        </div>
+        <button class="btn btn-outline" style="padding:9px;font-size:13px;" onclick="markBlogDone('${b.id}')">✓ 投稿した（リストから消す）</button>
+      </div>`;
+    }).join('');
+  body.innerHTML = html;
+}
+
+function currentSendDraft() { return draftsCache.find(d => d.id === sendCurrentId); }
+
+function sendCopy() {
+  const d = currentSendDraft();
+  if (!d) return;
+  navigator.clipboard.writeText(d.body).then(() => showToast('コピーしました。LINEに貼り付けて送信してください'));
+}
+
+async function sendDone() {
+  const d = currentSendDraft();
+  if (!d || sendBusy) return;
+  const s = getStudents().find(x => x.id === d.studentId);
+  if (!s) return;
+  sendBusy = true;
+  document.getElementById('send-done-btn').disabled = true;
+  try {
+    const { db, doc, setDoc } = window.fb;
+    const reportId = uid();
+    const sentAt = new Date().toISOString();
+    // 既存の「送信済みにする」と同じ形で記録する
+    await setDoc(doc(db, 'users', fbUser.uid, 'reports', reportId), {
+      studentId:   s.id,
+      studentName: s.name,
+      level:       s.level,
+      reportType:  'class',
+      body:        d.body,
+      blogBody:    d.blogBody || '',
+      sentAt
+    });
+    // チェック済みのカルテ候補を保存（作成画面の saveKarteCands と同じく source: 'auto'）
+    const cands = (d.karteCands || []).filter(c => c.checked && !c.saved);
+    for (const c of cands) await saveNote(s.id, c.category, c.text, 'auto');
+    await saveDraft(d.id, {sentAt, reportId, karteCands: (d.karteCands || []).map(c => c.checked ? {...c, saved: true} : c)});
+    await cleanupDraft(d.id);
+    showToast(`${s.name} を送信済みに記録しました${cands.length ? `（カルテ ${cands.length}件保存）` : ''}`);
+  } catch (e) {
+    showToast('記録に失敗しました: ' + (e.message || ''));
+  } finally {
+    sendBusy = false;
+    sendCurrentId = null;
+    renderSend();
+    window.scrollTo(0, 0);
+  }
+}
+
+function sendLater() {
+  const d = currentSendDraft();
+  if (!d) return;
+  sendLaterIds = [...sendLaterIds.filter(id => id !== d.id), d.id];
+  sendCurrentId = null;
+  renderSend();
+}
+
+async function sendBackToReview() {
+  const d = currentSendDraft();
+  if (!d) return;
+  await saveDraft(d.id, {review: 'pending'});
+  sendCurrentId = null;
+  renderSend();
+  showToast('確認キューに戻しました');
+}
+
+function copyDraftBlog(id) {
+  const d = draftsCache.find(x => x.id === id);
+  if (d && d.blogBody) navigator.clipboard.writeText(d.blogBody).then(() => showToast('ブログ記事をコピーしました'));
+}
+
+async function markBlogDone(id) {
+  await saveDraft(id, {blogDone: true});
+  await cleanupDraft(id);
+  renderSend();
+}
+
+// 報告を送り、ブログも済んだ（またはない）下書きは消す。報告そのものは reports に残っている
+async function cleanupDraft(id) {
+  const d = draftsCache.find(x => x.id === id);
+  if (!d || !d.sentAt || (d.blogBody && !d.blogDone)) return;
+  const { db, doc, deleteDoc } = window.fb;
+  draftsCache = draftsCache.filter(x => x.id !== id);
+  await deleteDoc(doc(db, 'users', fbUser.uid, 'drafts', id));
 }
 
 // キーボード操作：Ctrl/⌘+Enter=OK（入力欄の外では Enter だけでも可）、Alt+→=スキップ
