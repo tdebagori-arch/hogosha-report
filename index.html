@@ -81,6 +81,22 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .badge-unsent{background:var(--red-l);color:var(--red);}
 .badge-optional{background:var(--gray-l);color:var(--gray);border:1px dashed var(--gray-bd);}
 
+/* WEEK PANEL (home) */
+.week-panel{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:12px 16px;}
+.week-head{display:flex;flex-direction:column;gap:2px;}
+.week-title{font-size:13px;font-weight:700;color:var(--gray);}
+.week-nums{font-size:14px;font-weight:700;}
+.week-nums b{font-size:22px;font-weight:800;}
+.week-nums .g{color:var(--green);}
+.week-nums .r{color:var(--red);}
+.week-bar{height:8px;border-radius:4px;background:var(--gray-l);margin-top:8px;overflow:hidden;}
+.week-bar-fill{height:100%;background:var(--green);border-radius:4px;transition:width 0.3s;}
+.week-actions{display:flex;gap:8px;margin-top:10px;}
+.week-actions .btn{padding:10px 6px;font-size:13px;}
+.week-actions:empty{display:none;}
+.sc-days{font-size:11px;color:var(--gray);}
+.sc-days.long{color:var(--red);font-weight:700;}
+
 /* LEVEL TABS (home) */
 .level-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;overflow-x:auto;padding:0 8px;}
 .level-tab{flex:1;min-width:72px;border:none;background:none;padding:12px 6px 10px;font-size:14px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
@@ -290,6 +306,7 @@ body.logged-out .bottom-nav{display:none;}
     <h1>保護者連絡</h1>
     <div class="page-hd-sub" id="home-month-label"></div>
   </div>
+  <div class="week-panel" id="home-week-panel"></div>
   <div class="level-tabs" id="home-level-tabs"></div>
   <div class="grade-tabs" id="home-grade-tabs" hidden></div>
   <div class="stat-bar">
@@ -668,9 +685,9 @@ const EVALS = [
 ];
 
 const LENGTH_OPTIONS = [
-  {key:'short',  label:'短め', desc:'3〜4文程度の簡潔な文章', tokens:400},
-  {key:'normal', label:'普通', desc:'5〜7文程度の標準的な文章', tokens:700},
-  {key:'long',   label:'長め', desc:'8文以上の詳しい文章',     tokens:1100},
+  {key:'short',  label:'短め', desc:'3〜4文程度の簡潔な文章'},
+  {key:'normal', label:'普通', desc:'5〜7文程度の標準的な文章'},
+  {key:'long',   label:'長め', desc:'8文以上の詳しい文章'},
 ];
 
 // ─── STORAGE ─────────────────────────────────────────────
@@ -942,6 +959,53 @@ function isTypeSentThisMonth(studentId, type) {
   );
 }
 
+// ─── 週（月曜はじまり）────────────────────────────────────
+function weekStart(d) {
+  const x = new Date(d || Date.now());
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+
+function ymdKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function currentWeekKey() { return ymdKey(weekStart()); }
+
+function weekRangeLabel() {
+  const s = weekStart();
+  const e = new Date(s); e.setDate(s.getDate() + 6);
+  return `${s.getMonth()+1}/${s.getDate()}〜${e.getMonth()+1}/${e.getDate()}`;
+}
+
+// 通常授業は週ごと、テスト前・テスト振り返りは月ごとに数える
+function isClassSentThisWeek(studentId) {
+  const from = weekStart().getTime();
+  return getReports().some(r =>
+    r.studentId === studentId && (r.reportType || 'class') === 'class' && r.sentAt && new Date(r.sentAt).getTime() >= from
+  );
+}
+
+function isTypeSentInPeriod(studentId, type) {
+  return type === 'class' ? isClassSentThisWeek(studentId) : isTypeSentThisMonth(studentId, type);
+}
+
+// 前回の通常授業報告からの日数（送ったことがなければ null）
+function daysSinceClassSent(studentId) {
+  const last = lastSentAt(studentId, 'class');
+  if (!last) return null;
+  const a = new Date(last); a.setHours(0, 0, 0, 0);
+  const b = new Date();     b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+
+function daysSinceLabel(studentId) {
+  const n = daysSinceClassSent(studentId);
+  if (n === null) return `<span class="sc-days long">通常授業の送信なし</span>`;
+  return `<span class="sc-days${n >= 7 ? ' long' : ''}">前回 ${n === 0 ? '今日' : n + '日前'}</span>`;
+}
+
 function lastSentAt(studentId, type) {
   return getReports()
     .filter(r => r.studentId === studentId && (r.reportType || 'class') === type && r.sentAt)
@@ -953,10 +1017,13 @@ function fmtMD(iso) {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
-// 種別ごとの送信状況バッジ。テスト前は任意なので未送信でも赤にせずグレー＋前回日付
+// 種別ごとの送信状況バッジ。通常授業は今週、ほかは今月。テスト前は任意なので未送信でも赤にせずグレー＋前回日付
 function typeStatusBadge(studentId, type, withLabel) {
   const prefix = withLabel ? `${REPORT_TYPE_LABEL[type]}: ` : '';
-  const sent = isTypeSentThisMonth(studentId, type);
+  const sent = isTypeSentInPeriod(studentId, type);
+  if (type === 'class') {
+    return `<span class="badge badge-${sent?'sent':'unsent'}">${prefix}${sent?'✓今週送信済':'今週まだ'}</span>`;
+  }
   if (type !== 'pretest') {
     return `<span class="badge badge-${sent?'sent':'unsent'}">${prefix}${sent?'✓送信済':'未送信'}</span>`;
   }
@@ -965,8 +1032,9 @@ function typeStatusBadge(studentId, type, withLabel) {
   return `<span class="badge badge-optional">${prefix}${last ? `前回 ${fmtMD(last)}` : '未送信'}</span>`;
 }
 
-function isFullySentThisMonth(student) {
-  return requiredTypesForLevel(student.level).every(t => isTypeSentThisMonth(student.id, t));
+// 必須の報告（通常授業は今週分、テスト振り返りは今月分）がそろっているか
+function isFullySentNow(student) {
+  return requiredTypesForLevel(student.level).every(t => isTypeSentInPeriod(student.id, t));
 }
 
 function showToast(msg) {
@@ -1052,7 +1120,7 @@ function renderHomeGradeTabs(levelStudents) {
   if (levelStudents.some(s => !s.grade)) tabs.push({key:'none', label:'未設定'});
   if (!tabs.some(t => t.key === homeGradeTab)) homeGradeTab = 'all';
   el.innerHTML = tabs.map(t => {
-    const unsent = levelStudents.filter(s => matchesGradeTab(s, t.key) && !isFullySentThisMonth(s)).length;
+    const unsent = levelStudents.filter(s => matchesGradeTab(s, t.key) && !isFullySentNow(s)).length;
     return `<button class="grade-tab${t.key === homeGradeTab ? ' active' : ''}" onclick="selectHomeGradeTab('${t.key}')">${t.label}${unsent ? `<span class="gt-unsent">${unsent}</span>` : ''}</button>`;
   }).join('');
   el.hidden = false;
@@ -1062,7 +1130,7 @@ function renderHomeLevelTabs(allStudents) {
   const tabs = [{key:'all', label:'すべて'}, ...LEVELS.map(lv => ({key: lv, label: lv}))];
   document.getElementById('home-level-tabs').innerHTML = tabs.map(t => {
     const list = t.key === 'all' ? allStudents : allStudents.filter(s => s.level === t.key);
-    const unsent = list.filter(s => !isFullySentThisMonth(s)).length;
+    const unsent = list.filter(s => !isFullySentNow(s)).length;
     const count = unsent
       ? `<span class="lt-count has-unsent" title="未送信 ${unsent}人">${unsent}</span>`
       : `<span class="lt-count">${list.length ? '✓' : 0}</span>`;
@@ -1070,10 +1138,32 @@ function renderHomeLevelTabs(allStudents) {
   }).join('');
 }
 
+// 今週の進み具合（通常授業の報告・全生徒）
+function renderWeekPanel(allStudents) {
+  const el = document.getElementById('home-week-panel');
+  if (!allStudents.length) { el.hidden = true; return; }
+  el.hidden = false;
+  const sent = allStudents.filter(s => isClassSentThisWeek(s.id)).length;
+  const left = allStudents.length - sent;
+  const pct = Math.round(sent / allStudents.length * 100);
+  el.innerHTML = `
+    <div class="week-head">
+      <div class="week-title">今週の進み具合（${weekRangeLabel()}）</div>
+      <div class="week-nums">送信済 <b class="g">${sent}</b>人 ／ 残り <b class="${left ? 'r' : 'g'}">${left}</b>人</div>
+    </div>
+    <div class="week-bar"><div class="week-bar-fill" style="width:${pct}%"></div></div>
+    <div class="week-actions">${weekActionsHtml()}</div>`;
+}
+
+// ホームの「今週」ボタン（まとめて作る・確認・送信）
+function weekActionsHtml() { return ''; }
+
 function renderHome() {
   const allStudents = getStudents();
   const d = new Date();
-  document.getElementById('home-month-label').textContent = `${d.getMonth()+1}月の連絡状況`;
+  document.getElementById('home-month-label').textContent =
+    `通常授業は今週（${weekRangeLabel()}）、テストの報告は${d.getMonth()+1}月の連絡状況`;
+  renderWeekPanel(allStudents);
 
   if (homeLevelTab !== 'all' && !LEVELS.includes(homeLevelTab)) homeLevelTab = 'all';
   renderHomeLevelTabs(allStudents);
@@ -1081,7 +1171,7 @@ function renderHome() {
   renderHomeGradeTabs(levelStudents);
   const students = levelStudents.filter(s => matchesGradeTab(s, homeGradeTab));
 
-  const sentCount = students.filter(s => isFullySentThisMonth(s)).length;
+  const sentCount = students.filter(s => isFullySentNow(s)).length;
   document.getElementById('stat-total').textContent  = students.length;
   document.getElementById('stat-total-label').textContent =
     homeLevelTab === 'all' ? '全生徒'
@@ -1111,26 +1201,33 @@ function renderHome() {
     return;
   }
 
+  // 今週まだ通常授業の報告を送っていない生徒を上に。その中では前回から日が空いている順
   const sorted = [...filtered].sort((a,b) => {
-    const as = isFullySentThisMonth(a), bs = isFullySentThisMonth(b);
+    const as = isClassSentThisWeek(a.id), bs = isClassSentThisWeek(b.id);
     if (as !== bs) return as ? 1 : -1;
+    if (!as) {
+      const ad = daysSinceClassSent(a.id), bd = daysSinceClassSent(b.id);
+      const av = ad === null ? Infinity : ad, bv = bd === null ? Infinity : bd;
+      if (av !== bv) return bv - av;
+    }
     return compareStudents(a, b);
   });
 
   el.innerHTML = sorted.map(s => {
     const types = typesForLevel(s.level);
-    const fullySent = isFullySentThisMonth(s);
+    const weekSent = isClassSentThisWeek(s.id);
     const statusHtml = types.length > 1
       ? types.map(t => typeStatusBadge(s.id, t, true)).join('')
-      : `<span class="badge badge-${fullySent?'sent':'unsent'}">${fullySent?'✓ 送信済':'未送信'}</span>`;
+      : typeStatusBadge(s.id, 'class', false);
     return `<div class="student-card" onclick="startCreate('${s.id}')">
-      <div class="sc-bar ${fullySent?'sent':'unsent'}"></div>
+      <div class="sc-bar ${weekSent?'sent':'unsent'}"></div>
       <div class="sc-info">
         <div class="sc-name">${esc(s.name)}</div>
         <div class="sc-meta">${esc(s.parentName||'—')}</div>
         <div class="sc-badges">
           <span class="badge badge-${s.level}">${gradeLabel(s)}</span>
           ${statusHtml}
+          ${daysSinceLabel(s.id)}
         </div>
       </div>
       <button class="karte-btn" onclick="event.stopPropagation();openKarte('${s.id}')">📒 カルテ</button>
@@ -1484,29 +1581,54 @@ async function onGenerate() {
 }
 
 // ─── CLAUDE API 共通 ──────────────────────────────────────
-async function callClaude(system, user, maxTokens) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': getApiKey(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: maxTokens,
-      system,
-      messages: [{role: 'user', content: user}]
-    })
+// effort: 'low'（抽出・分類など単純な処理）/ 'medium'（文章作成・チェック）
+// 文章の長さはプロンプトで指定する。思考分も max_tokens に含まれるので上限は広めにとる
+async function callClaude(system, user, effort) {
+  const body = JSON.stringify({
+    model: CLAUDE_MODEL,
+    max_tokens: 16000,
+    output_config: {effort: effort || 'medium'},
+    fallbacks: 'default',
+    system,
+    messages: [{role: 'user', content: user}]
   });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTPエラー ${resp.status}`);
+  for (let attempt = 0; ; attempt++) {
+    let resp;
+    try {
+      resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': getApiKey(),
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'server-side-fallback-2026-07-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body
+      });
+    } catch (e) {
+      if (attempt < 3) { await sleep(2000 * 2 ** attempt); continue; }
+      throw new Error('AIに接続できませんでした（通信エラー）');
+    }
+    // 混雑・レート制限・一時的なエラーは待ってから再試行
+    if ((resp.status === 429 || resp.status >= 500) && attempt < 3) {
+      const ra = Number(resp.headers.get('retry-after'));
+      await sleep(ra > 0 ? ra * 1000 : 3000 * 2 ** attempt);
+      continue;
+    }
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      const msg = err.error?.message || `HTTPエラー ${resp.status}`;
+      throw new Error(resp.status === 429 ? `混雑のため実行できませんでした（${msg}）` : msg);
+    }
+    const data = await resp.json();
+    if (data.stop_reason === 'refusal') throw new Error('AIが生成を断りました。メモの内容を見直してください');
+    if (data.stop_reason === 'max_tokens') throw new Error('文章が長すぎて途中で切れました。もう一度試してください');
+    return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
   }
-  const data = await resp.json();
-  return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('').trim();
 }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ─── ブログ記事生成 ───────────────────────────────────────
 const BLOG_TEACHERS = [
@@ -1515,7 +1637,7 @@ const BLOG_TEACHERS = [
   '沼田先生（ぬま）','菅原先生（ゆめ）','杏樹先生（あんじゅ）'
 ];
 const DEFAULT_BLOG_TEACHER = '高山先生（そうご）';
-const CLAUDE_MODEL = 'claude-opus-4-8';
+const CLAUDE_MODEL = 'claude-opus-5-5';
 let genSeq = 0;
 
 function onBlogToggle(el) {
@@ -1568,7 +1690,7 @@ ${reportText}
 
 【指導メモ・文字起こし】
 ${note || '（なし）'}`;
-  return callClaude(system, user, 1500);
+  return callClaude(system, user, 'medium');
 }
 
 async function generateBlogAndCheck(student, reportText, note, seq) {
@@ -1655,7 +1777,7 @@ ${common}`
 - 誤字脱字、不自然な日本語
 ${common}`;
   const user = `【チェック対象】\n${text}\n\n【参考：指導メモ・文字起こし】\n${note || '（なし）'}`;
-  const raw = await callClaude(system, user, 2500);
+  const raw = await callClaude(system, user, 'medium');
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('チェック結果を読み取れませんでした');
   const parsed = JSON.parse(m[0]);
@@ -1851,7 +1973,7 @@ async function extractKarteCands(student, note, seq) {
 {"notes":[{"category":"好きなこと|雑談|家庭・部活|学習","text":"..."}]}`;
   const user = `生徒: ${student.name}（${gradeLabel(student)}）\n\n【既存のカルテメモ】\n${existing}\n\n【今回の文字起こし】\n${note}`;
   try {
-    const raw = await callClaude(system, user, 1000);
+    const raw = await callClaude(system, user, 'low');
     if (seq !== genSeq) return;
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {notes: []};
@@ -1970,7 +2092,7 @@ async function generateReport(student, reportType, evalType, chips, note, length
 ${karte ? `\n【生徒カルテ（参考）】\n${karte}\n` : ''}
 連絡文のみ出力してください。`;
 
-  return callClaude(systemPrompt, userPrompt, lengthOpt.tokens);
+  return callClaude(systemPrompt, userPrompt, 'medium');
 }
 
 // ─── HISTORY ─────────────────────────────────────────────
@@ -2069,7 +2191,7 @@ function renderSettings() {
         <div class="settings-hint">入力すると自動で保存されます。Anthropic Consoleで取得したキーを貼り付けてください。</div>
       </div>
       <div class="settings-group">
-        <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: claude-opus-4-8</div>
+        <div class="settings-hint" style="font-size:11px;margin-top:4px;">使用モデル: ${CLAUDE_MODEL}</div>
       </div>
       <div class="settings-group">
         <label>OpenAI APIキー（音声入力用） ${openaiStatus}</label>
