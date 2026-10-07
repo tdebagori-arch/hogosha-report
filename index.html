@@ -119,6 +119,28 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif;backgrou
 .batch-msg .btn{display:inline-block;width:auto;padding:6px 12px;font-size:12px;margin:6px 6px 0 0;}
 .sticky-foot{position:sticky;bottom:var(--nav-h);background:var(--white);border-top:1px solid var(--gray-bd);padding:10px 16px;z-index:40;}
 
+/* REVIEW / SEND QUEUE */
+.q-sec{background:var(--white);margin-top:12px;border-top:1px solid var(--gray-bd);border-bottom:1px solid var(--gray-bd);padding:12px 16px;display:flex;flex-direction:column;gap:10px;}
+.q-name{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.q-meta{font-size:12px;color:var(--gray);}
+.q-warn{font-size:12px;color:var(--orange);background:var(--orange-l);border-radius:var(--r-sm);padding:6px 10px;}
+.q-pick{font-size:13px;line-height:1.6;}
+.q-pick button{border:none;background:none;color:var(--blue);font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;padding:0 4px;}
+.q-pick-edit .eval-grid,.q-pick-edit .chip-wrap{padding:0;}
+.q-pick-edit .eval-grid{grid-template-columns:repeat(5,1fr);gap:6px;}
+.q-pick-edit .eval-btn{padding:8px 2px;}
+.q-pick-edit .chip{padding:6px 10px;font-size:12px;}
+.q-material{font-size:12px;color:var(--gray);white-space:pre-wrap;line-height:1.6;max-height:160px;overflow-y:auto;background:var(--gray-l);border-radius:var(--r-sm);padding:8px 10px;}
+details.q-details summary{font-size:12px;color:var(--gray);cursor:pointer;font-weight:600;}
+.q-foot-row{display:flex;gap:8px;margin-bottom:8px;}
+.q-foot-row .btn{padding:10px 4px;font-size:13px;}
+.q-progress{font-size:12px;color:var(--gray);text-align:center;margin-bottom:6px;}
+.q-keys{font-size:11px;color:var(--gray);text-align:center;margin-top:6px;}
+@media (hover:none){.q-keys{display:none;}}
+.send-item{background:var(--white);border-bottom:1px solid var(--gray-bd);padding:12px 16px;display:flex;flex-direction:column;gap:8px;}
+.send-item.done{opacity:0.55;}
+.send-body{font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto;color:var(--navy);}
+
 /* LEVEL TABS (home) */
 .level-tabs{background:var(--white);border-bottom:1px solid var(--gray-bd);display:flex;overflow-x:auto;padding:0 8px;}
 .level-tab{flex:1;min-width:72px;border:none;background:none;padding:12px 6px 10px;font-size:14px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
@@ -494,6 +516,19 @@ body.logged-out .bottom-nav{display:none;}
   </div>
 </div>
 
+<!-- ── REVIEW QUEUE SCREEN ── -->
+<div id="screen-review" class="screen">
+  <div class="create-hd">
+    <button class="back-btn" onclick="goHome()">‹</button>
+    <div class="create-hd-info">
+      <div class="create-hd-name">確認キュー</div>
+      <div class="create-hd-sub" id="review-sub"></div>
+    </div>
+  </div>
+  <div class="create-body" id="review-body"></div>
+  <div class="sticky-foot" id="review-foot"></div>
+</div>
+
 <!-- ── HISTORY SCREEN ── -->
 <div id="screen-history" class="screen">
   <div class="page-hd"><h1>送信履歴</h1></div>
@@ -638,7 +673,7 @@ window.dispatchEvent(new Event('fb-ready'));
 
 <script>
 // ─── CONSTANTS ────────────────────────────────────────────
-const SCREENS = ['home','history','settings','create','type','karte','batch'];
+const SCREENS = ['home','history','settings','create','type','karte','batch','review'];
 const LEVELS =['高校生', '中学生', '小学生'];
 const GRADE_COUNT = {'高校生': 3, '中学生': 3, '小学生': 6};
 const LEVEL_SHORT = {'高校生': '高', '中学生': '中', '小学生': '小'};
@@ -792,6 +827,7 @@ function rerenderCurrentScreen() {
   if (active.id === 'screen-settings') renderSettings();
   if (active.id === 'screen-karte')    renderKarte();
   if (active.id === 'screen-batch')    refreshBatch();
+  if (active.id === 'screen-review')   refreshReview();
 }
 
 function subscribeAll(uid) {
@@ -1213,7 +1249,9 @@ function renderWeekPanel(allStudents) {
 
 // ホームの「今週」ボタン（まとめて作る・確認・送信）
 function weekActionsHtml() {
-  return `<button class="btn btn-blue" onclick="openBatch()">📦 まとめて作る</button>`;
+  const toReview = reviewQueue().length;
+  return `<button class="btn btn-blue" onclick="openBatch()">📦 まとめて作る</button>` +
+    `<button class="btn ${toReview ? 'btn-green' : 'btn-outline'}" onclick="openReview()">✅ 確認 ${toReview}件</button>`;
 }
 
 function renderHome() {
@@ -2369,7 +2407,7 @@ function updateBatchRow(sid) {
   if (st === 'done') {
     cls = 'done';
     label = d.sentAt ? '送信済' : d.review === 'ok' ? '確認済' : '完了';
-    msg = d.sentAt ? '' : d.review === 'ok' ? '確認済み · 送信待ち' : '確認待ち';
+    msg = d.sentAt ? '' : d.review === 'ok' ? '確認済み · 送信待ち' : '確認待ち <button class="btn btn-green" onclick="openReview()">✅ 確認する</button>';
     msg += ` <button class="btn btn-outline" onclick="retryBatch('${sid}')">🔁 素材から作り直す</button>`;
   } else if (st === 'failed' || st === 'interrupted') {
     cls = 'failed'; err = true;
@@ -2504,8 +2542,8 @@ async function processDraft(studentId, opts = {}) {
     await set({
       status: 'done', error: '', errorCode: '',
       note, evalLabel: picked.evalLabel, chips: picked.chips, length: batchLength,
-      body, reportCheck,
-      blogBody: blog.body, blogCheck: blog.check, blogError: blog.error, blogDone: false,
+      body, reportCheck, reportCheckedText: body,
+      blogBody: blog.body, blogCheck: blog.check, blogCheckedText: blog.body, blogError: blog.error, blogDone: false,
       karteCands: karte.cands.map(c => ({category: c.category, text: c.text, checked: true})), karteError: karte.error,
       review: 'pending', generatedAt: new Date().toISOString(),
     });
@@ -2542,6 +2580,318 @@ async function pickEvalAndChips(student, note) {
 
 window.addEventListener('beforeunload', e => {
   if (batchRunning.size) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ─── 確認キュー ───────────────────────────────────────────
+let reviewCurrentId = null;
+let reviewDoneCount = 0;
+let reviewPickOpen  = false;
+let reviewBusy      = false;
+let reviewSaveTimer = null;
+
+function studentOrder(a, b) {
+  const sa = getStudents().find(s => s.id === a.studentId), sb = getStudents().find(s => s.id === b.studentId);
+  if (!sa || !sb) return sa ? -1 : sb ? 1 : 0;
+  const ad = daysSinceClassSent(sa.id), bd = daysSinceClassSent(sb.id);
+  const av = ad === null ? Infinity : ad, bv = bd === null ? Infinity : bd;
+  return (bv - av) || compareStudents(sa, sb);
+}
+
+// 先週以前の下書きを先に、あとは送信が空いている生徒順
+function sortDrafts(list) {
+  return [...list].sort((a, b) => (a.weekKey || '').localeCompare(b.weekKey || '') || studentOrder(a, b));
+}
+
+function reviewQueue() {
+  return sortDrafts(draftsCache.filter(d => d.status === 'done' && !d.sentAt && (d.review || 'pending') === 'pending'
+    && getStudents().some(s => s.id === d.studentId)));
+}
+function skippedDrafts() { return draftsCache.filter(d => d.status === 'done' && !d.sentAt && d.review === 'skipped'); }
+
+function openReview() {
+  reviewDoneCount = 0;
+  reviewCurrentId = null;
+  hideAllScreens();
+  document.getElementById('screen-review').classList.add('active');
+  renderReview();
+}
+
+function currentReviewDraft() { return draftsCache.find(d => d.id === reviewCurrentId); }
+
+function renderReview() {
+  const q = reviewQueue();
+  if (!q.some(d => d.id === reviewCurrentId)) { reviewCurrentId = q.length ? q[0].id : null; reviewPickOpen = false; }
+  const total = q.length + reviewDoneCount;
+  document.getElementById('review-sub').textContent = q.length ? `残り ${q.length}件（${reviewDoneCount + 1}/${total}）` : '確認待ちはありません';
+  const body = document.getElementById('review-body');
+  const foot = document.getElementById('review-foot');
+  const d = currentReviewDraft();
+  if (!d) {
+    const skipped = skippedDrafts().length;
+    const toSend  = draftsCache.filter(x => x.status === 'done' && !x.sentAt && x.review === 'ok').length;
+    body.innerHTML = `<div class="empty"><div class="big">✅</div><p>確認待ちの下書きはありません。${toSend ? `<br>送信待ちが ${toSend}件あります。` : ''}</p></div>`;
+    foot.innerHTML = (skipped ? `<button class="btn btn-outline" style="margin-bottom:8px;" onclick="unskipAll()">スキップした ${skipped}件をもう一度確認する</button>` : '') +
+      (toSend && typeof openSend === 'function' ? `<button class="btn btn-green" onclick="openSend()">📤 送信キューへ</button>` : `<button class="btn btn-outline" onclick="goHome()">ホームに戻る</button>`);
+    return;
+  }
+  const s = getStudents().find(x => x.id === d.studentId);
+  const oldWeek = d.weekKey !== currentWeekKey();
+  const alreadySent = isClassSentThisWeek(d.studentId);
+  const reportStale = d.reportCheck && d.reportCheckedText !== undefined && d.reportCheckedText !== d.body;
+  const blogStale   = d.blogCheck && d.blogCheckedText !== undefined && d.blogCheckedText !== d.blogBody;
+  body.innerHTML = `
+    <div class="q-sec">
+      <div class="q-name">${esc(s.name)} <span class="badge badge-${s.level}">${gradeLabel(s)}</span></div>
+      <div class="q-meta">${s.parentName ? '保護者: ' + esc(s.parentName) + ' · ' : ''}${daysSinceClassSent(s.id) === null ? '通常授業の送信なし' : '前回 ' + daysSinceClassSent(s.id) + '日前'}</div>
+      ${oldWeek ? `<div class="q-warn">${esc(d.weekKey)} の週に作った下書きです</div>` : ''}
+      ${alreadySent ? `<div class="q-warn">この生徒には今週すでに通常授業の報告を送っています</div>` : ''}
+      <div class="q-pick" id="q-pick">${reviewPickHtml(d)}</div>
+      <details class="q-details"><summary>素材を見る</summary><div class="q-material">${esc(d.note || '')}</div></details>
+    </div>
+    <div class="q-sec">
+      <div class="result-label">報告文（編集できます）</div>
+      <textarea class="result-ta" id="q-report" rows="9" oninput="onReviewEdit('body', this.value)">${esc(d.body || '')}</textarea>
+      <div class="check-box ${reportStale ? 'warn' : checkBoxClass(d.reportCheck || {})}" id="q-report-check">${reviewCheckHtml('report', d, reportStale)}</div>
+    </div>
+    ${d.blogBody || d.blogError ? `
+    <div class="q-sec">
+      <div class="result-label">褒めブログ（公開用・個人名なし／編集できます）</div>
+      ${d.blogBody ? `<textarea class="result-ta" id="q-blog" rows="8" oninput="onReviewEdit('blogBody', this.value)">${esc(d.blogBody)}</textarea>
+      <div class="check-box ${blogStale ? 'warn' : checkBoxClass(d.blogCheck || {})}" id="q-blog-check">${reviewCheckHtml('blog', d, blogStale)}</div>`
+      : `<div class="check-box warn">ブログ生成エラー: ${esc(d.blogError)}（「再生成」で作り直せます）</div>`}
+    </div>` : ''}
+    <div class="q-sec">
+      ${reviewKarteHtml(d)}
+    </div>`;
+  const hasRevised = !!(d.reportCheck && d.reportCheck.revised) && !reportStale;
+  foot.innerHTML = `
+    <div class="q-foot-row">
+      <button class="btn btn-outline" onclick="reviewSkip()">⏭ スキップ</button>
+      <button class="btn btn-outline" onclick="reviewRegenerate()">🔄 再生成</button>
+      <button class="btn btn-outline" onclick="reviewApplyRevised('report')" ${hasRevised ? '' : 'disabled'}>✏️ 修正版を反映</button>
+    </div>
+    <button class="btn btn-green" id="review-ok-btn" onclick="reviewOk()">✓ OK（次へ）</button>
+    <div class="q-keys">⌨️ Ctrl+Enter（入力欄の外では Enter）でOK · Alt+→ でスキップ</div>`;
+}
+
+function reviewPickHtml(d) {
+  const chips = d.chips || [];
+  if (!reviewPickOpen) {
+    return `評価：<b>${esc(d.evalLabel || '—')}</b>${chips.length ? ' · ' + chips.map(esc).join('、') : ''}<button onclick="toggleReviewPick()">変更</button>`;
+  }
+  const s = getStudents().find(x => x.id === d.studentId);
+  return `<div class="q-pick-edit">
+    <div class="eval-grid">${EVALS.map((e, i) => `<button class="eval-btn${evalLabelOf(e) === d.evalLabel ? ' sel' : ''}" onclick="reviewSetEval(${i})"><span class="e-emoji">${e.emoji}</span><span class="e-label">${e.label}</span></button>`).join('')}</div>
+    <div class="chip-wrap" style="margin-top:8px;">${getChipsFor(s.level, 'class').map(c => `<div class="chip${chips.includes(c) ? ' sel' : ''}" data-chip="${esc(c)}" onclick="reviewToggleChip(this)">${esc(c)}</div>`).join('')}</div>
+    <div class="settings-hint">変えたら「🔄 再生成」で報告文に反映されます。<button onclick="toggleReviewPick()">閉じる</button></div>
+  </div>`;
+}
+
+function reviewCheckHtml(kind, d, stale) {
+  const result = kind === 'report' ? d.reportCheck : d.blogCheck;
+  if (stale) {
+    return `<div class="check-head">✏️ 編集後はまだチェックしていません</div>
+      <div class="check-actions"><button class="btn btn-outline" onclick="reviewRecheck('${kind}')">🔁 再チェック</button></div>`;
+  }
+  if (!result) return `<div class="check-head">チェック結果がありません</div><div class="check-actions"><button class="btn btn-outline" onclick="reviewRecheck('${kind}')">🔁 チェックする</button></div>`;
+  return checkBoxInner(kind, result) + `<div class="check-actions">
+      ${kind === 'blog' && result.revised ? `<button class="btn btn-green" onclick="reviewApplyRevised('blog')">✏️ 修正版を反映</button>` : ''}
+      <button class="btn btn-outline" onclick="reviewRecheck('${kind}')">🔁 再チェック</button>
+    </div>`;
+}
+
+function reviewKarteHtml(d) {
+  const cands = d.karteCands || [];
+  if (d.karteError) return `<div class="check-box warn">カルテ候補の抽出に失敗しました: ${esc(d.karteError)}</div>`;
+  if (!cands.length) return `<div class="check-head" style="font-size:13px;">📒 今回はカルテに残す新しい話題はありませんでした</div>`;
+  return `<div class="check-box karte-box"><div class="check-head">📒 カルテに残す候補（「送った」を押したときに保存されます）</div>` +
+    cands.map((c, i) => `
+      <label class="cand-item">
+        <input type="checkbox" ${c.checked ? 'checked' : ''} onchange="reviewToggleCand(${i}, this.checked)">
+        <span><span class="note-cat c-${esc(c.category)}">${esc(c.category)}</span> ${esc(c.text)}</span>
+      </label>`).join('') + `</div>`;
+}
+
+// Firestore の更新が来たとき：表示中の下書きが外れた場合だけ描き直す（入力中の文章を消さない）
+function refreshReview() {
+  if (reviewBusy) return;
+  const q = reviewQueue();
+  if (!q.some(d => d.id === reviewCurrentId)) { renderReview(); return; }
+  const total = q.length + reviewDoneCount;
+  document.getElementById('review-sub').textContent = `残り ${q.length}件（${reviewDoneCount + 1}/${total}）`;
+}
+
+function onReviewEdit(field, value) {
+  const d = currentReviewDraft();
+  if (!d) return;
+  d[field] = value;
+  clearTimeout(reviewSaveTimer);
+  const id = d.id;
+  reviewSaveTimer = setTimeout(() => saveDraft(id, {[field]: value}), 600);
+  // 編集したらチェック結果は古くなる
+  const kind = field === 'body' ? 'report' : 'blog';
+  const box = document.getElementById(kind === 'report' ? 'q-report-check' : 'q-blog-check');
+  const checked = kind === 'report' ? d.reportCheckedText : d.blogCheckedText;
+  const stale = checked !== undefined ? checked !== value : true;
+  if (box && stale && !box.dataset.stale) {
+    box.dataset.stale = '1';
+    box.className = 'check-box warn';
+    box.innerHTML = reviewCheckHtml(kind, d, true);
+    if (kind === 'report') { const b = document.querySelector('#review-foot .q-foot-row .btn:nth-child(3)'); if (b) b.disabled = true; }
+  }
+}
+
+// 入力欄の内容をそのまま保存する（キャッシュは Firestore の更新で差し替わることがあるので画面から読む）
+function flushReviewSave() {
+  clearTimeout(reviewSaveTimer);
+  const d = currentReviewDraft();
+  if (!d) return Promise.resolve();
+  const obj = {};
+  const r = document.getElementById('q-report'), b = document.getElementById('q-blog');
+  if (r) obj.body = r.value;
+  if (b) obj.blogBody = b.value;
+  return saveDraft(d.id, obj);
+}
+
+function toggleReviewPick() {
+  reviewPickOpen = !reviewPickOpen;
+  const d = currentReviewDraft();
+  if (d) document.getElementById('q-pick').innerHTML = reviewPickHtml(d);
+}
+
+function reviewSetEval(i) {
+  const d = currentReviewDraft();
+  if (!d) return;
+  d.evalLabel = evalLabelOf(EVALS[i]);
+  saveDraft(d.id, {evalLabel: d.evalLabel});
+  document.getElementById('q-pick').innerHTML = reviewPickHtml(d);
+}
+
+function reviewToggleChip(el) {
+  const d = currentReviewDraft();
+  if (!d) return;
+  const c = el.dataset.chip;
+  const chips = [...(d.chips || [])];
+  const i = chips.indexOf(c);
+  if (i === -1) chips.push(c); else chips.splice(i, 1);
+  d.chips = chips;
+  saveDraft(d.id, {chips});
+  el.classList.toggle('sel', i === -1);
+}
+
+function reviewToggleCand(i, checked) {
+  const d = currentReviewDraft();
+  if (!d) return;
+  const cands = (d.karteCands || []).map((c, j) => j === i ? {...c, checked} : c);
+  d.karteCands = cands;
+  saveDraft(d.id, {karteCands: cands});
+}
+
+async function reviewRecheck(kind) {
+  const d = currentReviewDraft();
+  if (!d) return;
+  await flushReviewSave();
+  const s = getStudents().find(x => x.id === d.studentId);
+  const ta = document.getElementById(kind === 'report' ? 'q-report' : 'q-blog');
+  const text = (ta ? ta.value : '').trim();
+  const box = document.getElementById(kind === 'report' ? 'q-report-check' : 'q-blog-check');
+  if (box) { box.className = 'check-box loading'; box.textContent = '🛡️ ネガチェック中...'; delete box.dataset.stale; }
+  const id = d.id;
+  const result = await checkText(kind, text, s, d.note || '');
+  const cur = (ta ? ta.value : '').trim();
+  await saveDraft(id, kind === 'report'
+    ? {reportCheck: result, reportCheckedText: cur === text ? ta.value : text}
+    : {blogCheck: result, blogCheckedText: cur === text ? ta.value : text});
+  if (reviewCurrentId === id) { flushReviewSave(); renderReview(); }
+}
+
+async function reviewApplyRevised(kind) {
+  const d = currentReviewDraft();
+  const result = d && (kind === 'report' ? d.reportCheck : d.blogCheck);
+  if (!result || !result.revised) return;
+  const field = kind === 'report' ? 'body' : 'blogBody';
+  d[field] = result.revised;
+  await saveDraft(d.id, {[field]: result.revised});
+  renderReview();
+  showToast('修正版を反映しました');
+  reviewRecheck(kind);
+}
+
+async function reviewRegenerate() {
+  const d = currentReviewDraft();
+  if (!d || reviewBusy) return;
+  if (!d.note || !d.note.trim()) { showToast('素材が空のため再生成できません'); return; }
+  const s = getStudents().find(x => x.id === d.studentId);
+  const id = d.id;
+  reviewBusy = true;
+  setLoading(true);
+  try {
+    const body = await generateReport(s, 'class', d.evalLabel || evalLabelOf(EVALS[4]), d.chips || [], d.note, d.length || batchLength, true);
+    const wantBlog = settingsCache.blogEnabled !== false;
+    const [reportCheck, blog] = await Promise.all([
+      checkText('report', body, s, d.note),
+      wantBlog
+        ? generateBlog(s, body, d.note).then(
+            async b => ({body: b, check: await checkText('blog', b, s, d.note), error: ''}),
+            e => ({body: '', check: null, error: e.message || '失敗しました'}))
+        : Promise.resolve({body: '', check: null, error: ''}),
+    ]);
+    await saveDraft(id, {body, reportCheck, reportCheckedText: body,
+      blogBody: blog.body, blogCheck: blog.check, blogCheckedText: blog.body, blogError: blog.error});
+    showToast('再生成しました');
+  } catch (e) {
+    showToast('エラー: ' + (e.message || '再生成に失敗しました'));
+  } finally {
+    reviewBusy = false;
+    setLoading(false);
+    if (reviewCurrentId === id) renderReview();
+  }
+}
+
+async function reviewOk() {
+  const d = currentReviewDraft();
+  if (!d || reviewBusy) return;
+  const body = document.getElementById('q-report').value.trim();
+  if (!body) { showToast('報告文が空です'); return; }
+  // 直近のチェックで要修正が出ていれば確認する（編集後に再チェックして解消していれば出ない）
+  const reportMust = checkHasMust(d.reportCheck);
+  const blogMust = !!document.getElementById('q-blog') && checkHasMust(d.blogCheck);
+  if ((reportMust || blogMust) &&
+      !confirm(`ネガチェックで「要修正」の指摘が残っています（${[reportMust && '報告文', blogMust && 'ブログ'].filter(Boolean).join('・')}）。\nこのままOKにしますか？`)) return;
+  await flushReviewSave();
+  await saveDraft(d.id, {review: 'ok', reviewedAt: new Date().toISOString()});
+  reviewDoneCount++;
+  renderReview();
+  window.scrollTo(0, 0);
+}
+
+async function reviewSkip() {
+  const d = currentReviewDraft();
+  if (!d || reviewBusy) return;
+  await flushReviewSave();
+  await saveDraft(d.id, {review: 'skipped'});
+  reviewDoneCount++;
+  renderReview();
+  window.scrollTo(0, 0);
+}
+
+async function unskipAll() {
+  await Promise.all(skippedDrafts().map(d => saveDraft(d.id, {review: 'pending'})));
+  reviewDoneCount = 0;
+  renderReview();
+}
+
+// キーボード操作：Ctrl/⌘+Enter=OK（入力欄の外では Enter だけでも可）、Alt+→=スキップ
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('screen-review').classList.contains('active')) return;
+  if (document.querySelector('.modal-overlay.open') || document.getElementById('loading').classList.contains('open')) return;
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  const inField = tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT';
+  if (e.key === 'Enter' && !e.isComposing && (e.ctrlKey || e.metaKey || (!inField && tag !== 'BUTTON' && tag !== 'SUMMARY'))) {
+    e.preventDefault(); reviewOk();
+  } else if (e.key === 'ArrowRight' && e.altKey) {
+    e.preventDefault(); reviewSkip();
+  }
 });
 
 // ─── HISTORY ─────────────────────────────────────────────
